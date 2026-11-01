@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{IntoResponse, Redirect, Response},
     Form,
 };
@@ -22,7 +22,7 @@ use crate::{
         self, display_date, FormErrors, Language, Product, ProductForm, ProductListItem,
         SaveError,
     },
-    storage,
+    qr, storage,
 };
 
 #[derive(Template)]
@@ -177,7 +177,7 @@ async fn show_page(
 
     Ok(ShowTemplate {
         user,
-        public_url: format!("{}/m/{}", state.config.public_base_url, product.public_slug),
+        public_url: public_url(state, &product),
         files: manuals::files(&state.db, product.id, &active).await?,
         product,
         languages,
@@ -255,6 +255,63 @@ pub async fn delete(
     storage::remove_files(&state.config.upload_dir, &stored_names).await;
     tracing::info!(id, files = stored_names.len(), by = %user.email, "изтрит продукт");
     Ok(Redirect::to("/products").into_response())
+}
+
+#[derive(Deserialize)]
+pub struct QrQuery {
+    #[serde(default)]
+    download: Option<String>,
+}
+
+pub async fn qr_svg(
+    State(state): State<AppState>,
+    CurrentUser(_): CurrentUser,
+    Path(id): Path<i64>,
+    Query(query): Query<QrQuery>,
+) -> AppResult<Response> {
+    let product = products::get(&state.db, id).await?.ok_or(AppError::NotFound)?;
+    let svg = qr::svg(&public_url(&state, &product))?;
+    Ok(qr_response(&product, "svg", "image/svg+xml", svg.into_bytes(), query.download.is_some()))
+}
+
+pub async fn qr_png(
+    State(state): State<AppState>,
+    CurrentUser(_): CurrentUser,
+    Path(id): Path<i64>,
+    Query(query): Query<QrQuery>,
+) -> AppResult<Response> {
+    let product = products::get(&state.db, id).await?.ok_or(AppError::NotFound)?;
+    // ~10 см при 300 DPI.
+    let png = qr::png(&public_url(&state, &product), 1200)?;
+    Ok(qr_response(&product, "png", "image/png", png, query.download.is_some()))
+}
+
+fn qr_response(product: &Product, ext: &str, mime: &'static str, body: Vec<u8>, download: bool) -> Response {
+    // Името на файла е по SKU, ако има, за да се намира лесно при печат.
+    let base: String = product
+        .sku
+        .as_deref()
+        .unwrap_or(&product.public_slug)
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    let disposition = format!(
+        "{}; filename=\"qr-{base}.{ext}\"",
+        if download { "attachment" } else { "inline" }
+    );
+    (
+        [
+            (header::CONTENT_TYPE, mime.to_owned()),
+            (header::CONTENT_DISPOSITION, disposition),
+            (header::CACHE_CONTROL, "private, no-cache".to_owned()),
+        ],
+        body,
+    )
+        .into_response()
+}
+
+fn public_url(state: &AppState, product: &Product) -> String {
+    format!("{}/m/{}", state.config.public_base_url, product.public_slug)
 }
 
 /// Грешка при запис, която потребителят може да поправи, става грешка в полето.

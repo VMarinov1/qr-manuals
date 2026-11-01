@@ -31,6 +31,8 @@ Rust, Axum 0.8, Askama 0.14 (шаблони в `templates/`), HTMX, Tailwind v4 
 - Качване (`src/web/files.rs`): поточно във временен `.upload-*` файл, лимит на файл `MAX_UPLOAD_MB`, видът по първите байтове (`storage::FileKind::detect`), после rename. Временните файлове се чистят при старт.
 - Файловете се сервират публично на `/f/{stored_name}` (с Range и `immutable` кеш). Изтриването на файл или продукт трие и от диска.
 - Съобщения след redirect: `web::flash::Flash` (бисквитка за една заявка).
+- Публична страница (`src/web/public.rs`, `templates/public/`): езикът се избира от `language::choose` (телефон → по подразбиране → първи наличен). `/m/:slug/:lang` без упътване на този език пренасочва към `/m/:slug`. Отговорът е с `Vary: Accept-Language`, `no-cache`, без бисквитки и с `noindex`.
+- QR (`src/qr.rs`): ниво на корекция Q, сочи към `PUBLIC_BASE_URL/m/:slug`. **`PUBLIC_BASE_URL` трябва да е истинският публичен адрес преди първия печат**, иначе отпечатаните кодове ще сочат грешно.
 - Product id-тата се преизползват след изтриване (SQLite `INTEGER PRIMARY KEY`), затова навън се ползва само `public_slug`.
 
 ## Тестове
@@ -53,4 +55,4 @@ docker compose exec app qr-manuals create-admin admin@example.com
 2. ✅ Вход и сесии
 3. ✅ Продукти
 4. ✅ Упътвания по езици и качване на файлове
-5. QR код и публична страница
+5. ✅ QR код и публична страница

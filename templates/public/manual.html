@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{#- Публичната страница: без текст на интерфейса, само съдържание, иконки и кодове на езици. -#}
+
+{% block lang %}{% if language.is_empty() %}{{ product.default_language }}{% else %}{{ language }}{% endif %}{% endblock %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block head %}
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#ffffff">
+{% endblock %}
+{% block body_class %}min-h-screen bg-white text-slate-900 antialiased{% endblock %}
+
+{% block content %}
+<header class="sticky top-0 z-10 border-b border-slate-100 bg-white/95 backdrop-blur">
+  <div class="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
+    <h1 class="min-w-0 flex-1 truncate text-base font-semibold">{{ product.name }}</h1>
+    {% if languages.len() > 1 %}
+    <nav class="flex shrink-0 gap-1">
+      {% for code in languages %}
+      <a href="/m/{{ product.public_slug }}/{{ code }}" hreflang="{{ code }}" lang="{{ code }}"
+         {% if code.as_str() == language.as_str() %}aria-current="page"{% endif %}
+         class="min-w-10 rounded-full px-2.5 py-1.5 text-center text-xs font-semibold uppercase tracking-wide {% if code.as_str() == language.as_str() %}bg-slate-900 text-white{% else %}text-slate-500 ring-1 ring-slate-200 active:bg-slate-100{% endif %}">{{ code }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+  </div>
+</header>
+
+<main class="mx-auto max-w-2xl pb-10">
+  {% if files.is_empty() %}
+  <div class="flex min-h-[60vh] items-center justify-center text-slate-300" aria-hidden="true">
+    <svg class="h-20 w-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/><path d="M3 3l18 18"/>
+    </svg>
+  </div>
+  {% else %}
+  <div class="space-y-3 sm:space-y-4 sm:px-4 sm:pt-4">
+    {% for file in files %}
+    {% if file.is_pdf() %}
+    <a href="/f/{{ file.stored_name }}" target="_blank" rel="noopener"
+       class="mx-4 flex items-center gap-4 rounded-2xl p-4 ring-1 ring-slate-200 active:bg-slate-50 sm:mx-0 {% if loop.first %}mt-4 sm:mt-0{% endif %}">
+      <span class="flex h-14 w-12 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600" aria-hidden="true">
+        <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 15h6"/>
+        </svg>
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="block break-words font-medium leading-snug">{{ file.original_name }}</span>
+        <span class="mt-0.5 block text-sm text-slate-500">PDF · {{ file.size_display() }}</span>
+      </span>
+      <svg class="h-6 w-6 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>
+      </svg>
+    </a>
+    {% else %}
+    <a href="/f/{{ file.stored_name }}" target="_blank" rel="noopener" class="block">
+      <img src="/f/{{ file.stored_name }}" alt="{{ product.name }} {{ loop.index }}"
+           {% if loop.index > 2 %}loading="lazy"{% endif %} decoding="async"
+           class="block h-auto w-full bg-slate-100 sm:rounded-2xl">
+    </a>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

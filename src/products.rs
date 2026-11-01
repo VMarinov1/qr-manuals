@@ -209,6 +209,20 @@ pub async fn get(db: &SqlitePool, id: i64) -> anyhow::Result<Option<Product>> {
     .await?)
 }
 
+pub fn is_valid_slug(slug: &str) -> bool {
+    slug.len() == SLUG_LEN && slug.bytes().all(|b| SLUG_ALPHABET.contains(&b))
+}
+
+pub async fn get_by_slug(db: &SqlitePool, slug: &str) -> anyhow::Result<Option<Product>> {
+    Ok(sqlx::query_as(
+        "SELECT id, name, sku, description, public_slug, default_language, created_at
+           FROM products WHERE public_slug = ?",
+    )
+    .bind(slug)
+    .fetch_optional(db)
+    .await?)
+}
+
 pub async fn create(db: &SqlitePool, input: &ProductInput) -> Result<i64, SaveError> {
     // Сблъсък на slug е почти невъзможен, но ако стане, се пробва с нов.
     for _ in 0..5 {

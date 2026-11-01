@@ -43,6 +43,18 @@ pub async fn file_counts(db: &SqlitePool, product_id: i64) -> anyhow::Result<Vec
     .await?)
 }
 
+/// Езиците, на които продуктът има упътване, в реда от таблица `languages`.
+pub async fn languages_with_files(db: &SqlitePool, product_id: i64) -> anyhow::Result<Vec<String>> {
+    Ok(sqlx::query_scalar(
+        "SELECT m.language FROM manuals m JOIN languages l ON l.code = m.language
+          WHERE m.product_id = ? AND EXISTS (SELECT 1 FROM files f WHERE f.manual_id = m.id)
+          ORDER BY l.sort_order",
+    )
+    .bind(product_id)
+    .fetch_all(db)
+    .await?)
+}
+
 pub async fn files(db: &SqlitePool, product_id: i64, language: &str) -> anyhow::Result<Vec<FileRow>> {
     Ok(sqlx::query_as(
         "SELECT f.id, f.original_name, f.stored_name, f.mime, f.size_bytes

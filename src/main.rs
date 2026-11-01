@@ -1,8 +1,10 @@
 mod auth;
 mod config;
 mod db;
+mod language;
 mod manuals;
 mod products;
+mod qr;
 mod storage;
 mod web;
 

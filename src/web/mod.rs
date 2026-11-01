@@ -3,6 +3,7 @@ mod error;
 mod files;
 mod flash;
 mod products;
+mod public;
 
 use std::sync::Arc;
 
@@ -53,7 +54,11 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
         )
         .route("/products/{id}/files/{file_id}/move", post(files::reorder))
         .route("/products/{id}/files/{file_id}/delete", post(files::delete))
+        .route("/products/{id}/qr.svg", get(products::qr_svg))
+        .route("/products/{id}/qr.png", get(products::qr_png))
         .route("/f/{stored_name}", get(files::serve))
+        .route("/m/{slug}", get(public::manual))
+        .route("/m/{slug}/{lang}", get(public::manual_in_language))
         .route("/health", get(health))
         .nest_service("/static", static_dir)
         .layer(middleware::from_fn_with_state(state.clone(), check_origin))
