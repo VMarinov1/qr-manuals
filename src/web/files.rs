@@ -1,4 +1,4 @@
-use std::path::Path as FsPath;
+use std::{path::Path as FsPath, sync::OnceLock};
 
 use axum::{
     body::Body,
@@ -13,7 +13,7 @@ use axum::{
 use axum_extra::extract::cookie::CookieJar;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::Deserialize;
-use tokio::io::AsyncWriteExt;
+use tokio::{io::AsyncWriteExt, sync::Semaphore};
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
@@ -24,6 +24,7 @@ use super::{
     AppState,
 };
 use crate::{
+    images,
     manuals::{self, NewFile},
     products,
     storage::{self, FileKind, TEMP_PREFIX},
@@ -78,14 +79,33 @@ pub async fn upload(
 
         match receive_file(dir, &mut field, max).await {
             Ok(Received::Saved { stored_name, kind, size }) => {
+                let display = match make_display_copy(dir, &stored_name, kind, size).await {
+                    Ok(display) => display,
+                    Err(err) => {
+                        storage::remove_files(dir, &[stored_name]).await;
+                        return Err(err.into());
+                    }
+                };
+                let (display_name, display_size) = match display {
+                    DisplayCopy::Unreadable => {
+                        storage::remove_files(dir, &[stored_name]).await;
+                        rejected.push(format!("{original}: снимката е повредена или не може да се прочете"));
+                        continue;
+                    }
+                    DisplayCopy::NotNeeded => (None, None),
+                    DisplayCopy::Created { name, size } => (Some(name), Some(size)),
+                };
                 let file = NewFile {
                     original_name: &original,
                     stored_name: &stored_name,
                     kind,
                     size_bytes: size as i64,
+                    display_name: display_name.as_deref(),
+                    display_size,
                 };
                 if let Err(err) = manuals::add_file(&state.db, product_id, &language, &file).await {
-                    storage::remove_files(dir, &[stored_name]).await;
+                    let names: Vec<String> = [Some(stored_name), display_name].into_iter().flatten().collect();
+                    storage::remove_files(dir, &names).await;
                     return Err(err.into());
                 }
                 saved += 1;
@@ -163,6 +183,54 @@ async fn receive_file(dir: &FsPath, field: &mut Field<'_>, max: usize) -> Result
     outcome
 }
 
+enum DisplayCopy {
+    NotNeeded,
+    Created { name: String, size: i64 },
+    Unreadable,
+}
+
+/// Декодирането на голяма снимка заема стотици MB. Едновременно се обработват най-много две.
+fn resize_slots() -> &'static Semaphore {
+    static SLOTS: OnceLock<Semaphore> = OnceLock::new();
+    SLOTS.get_or_init(|| Semaphore::new(2))
+}
+
+/// Записва намалено копие до оригинала. Снимката се декодира и така се проверява,
+/// че не е повредена, дори когато копие не е нужно.
+async fn make_display_copy(
+    dir: &FsPath,
+    stored_name: &str,
+    kind: FileKind,
+    size: usize,
+) -> anyhow::Result<DisplayCopy> {
+    if kind == FileKind::Pdf {
+        return Ok(DisplayCopy::NotNeeded);
+    }
+    let _slot = resize_slots().acquire().await?;
+    let path = storage::path_for(dir, stored_name);
+    let started = std::time::Instant::now();
+    let result = tokio::task::spawn_blocking(move || images::display_copy(&path, size as u64)).await?;
+
+    match result {
+        Ok(None) => Ok(DisplayCopy::NotNeeded),
+        Ok(Some(bytes)) => {
+            let name = storage::new_stored_name(FileKind::Jpeg);
+            tokio::fs::write(storage::path_for(dir, &name), &bytes).await?;
+            tracing::info!(
+                original = size,
+                copy = bytes.len(),
+                ms = started.elapsed().as_millis() as u64,
+                "намалена снимка"
+            );
+            Ok(DisplayCopy::Created { name, size: bytes.len() as i64 })
+        }
+        Err(err) => {
+            tracing::warn!(file = %stored_name, "снимката не може да се прочете: {err:#}");
+            Ok(DisplayCopy::Unreadable)
+        }
+    }
+}
+
 /// Връща първите байтове и размера, или None, ако файлът надвиши лимита.
 async fn write_temp(
     path: &FsPath,
@@ -188,21 +256,28 @@ async fn write_temp(
     Ok(Some((head, size)))
 }
 
-/// Публично сервиране на качен файл. Имената са случайни и не се променят,
-/// затова браузърът може да ги кешира без проверка.
+/// Публично сервиране на качен файл или на намаленото му копие. Имената са
+/// случайни и не се променят, затова браузърът може да ги кешира без проверка.
 pub async fn serve(
     State(state): State<AppState>,
-    Path(stored_name): Path<String>,
+    Path(name): Path<String>,
     request: Request,
 ) -> AppResult<Response> {
-    if !storage::is_valid_stored_name(&stored_name) {
+    if !storage::is_valid_stored_name(&name) {
         return Err(AppError::NotFound);
     }
-    let file = manuals::find_by_stored_name(&state.db, &stored_name)
+    let file = manuals::find_by_disk_name(&state.db, &name)
         .await?
         .ok_or(AppError::NotFound)?;
+    let is_copy = file.display_name.as_deref() == Some(name.as_str());
+    let (mime, download_name) = if is_copy {
+        let stem = file.original_name.rsplit_once('.').map_or(file.original_name.as_str(), |(stem, _)| stem);
+        (FileKind::Jpeg.mime(), format!("{stem}.jpg"))
+    } else {
+        (file.mime.as_str(), file.original_name.clone())
+    };
 
-    let path = storage::path_for(&state.config.upload_dir, &file.stored_name);
+    let path = storage::path_for(&state.config.upload_dir, &name);
     // ServeFile поддържа Range заявки, които телефоните ползват за големи PDF файлове.
     let mut response = ServeFile::new(path)
         .oneshot(request)
@@ -211,17 +286,17 @@ pub async fn serve(
         .unwrap_or_else(|never| match never {});
 
     if response.status() == StatusCode::NOT_FOUND {
-        tracing::error!(file = %file.stored_name, "файлът липсва на диска");
+        tracing::error!(file = %name, "файлът липсва на диска");
         return Err(AppError::NotFound);
     }
 
     let headers = response.headers_mut();
-    if let Ok(mime) = HeaderValue::from_str(&file.mime) {
+    if let Ok(mime) = HeaderValue::from_str(mime) {
         headers.insert(header::CONTENT_TYPE, mime);
     }
     let disposition = format!(
         "inline; filename*=UTF-8''{}",
-        utf8_percent_encode(&file.original_name, NON_ALPHANUMERIC)
+        utf8_percent_encode(&download_name, NON_ALPHANUMERIC)
     );
     if let Ok(value) = HeaderValue::from_str(&disposition) {
         headers.insert(header::CONTENT_DISPOSITION, value);
@@ -243,9 +318,8 @@ pub async fn delete(
     let language = manuals::file_language(&state.db, product_id, file_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    if let Some(stored_name) = manuals::delete_file(&state.db, file_id).await? {
-        storage::remove_files(&state.config.upload_dir, &[stored_name]).await;
-    }
+    let names = manuals::delete_file(&state.db, file_id).await?;
+    storage::remove_files(&state.config.upload_dir, &names).await;
     tracing::info!(product_id, file_id, by = %user.email, "изтрит файл");
     let jar = Flash::ok("Файлът е изтрит.").set(jar);
     Ok((jar, Redirect::to(&manual_url(product_id, &language))).into_response())

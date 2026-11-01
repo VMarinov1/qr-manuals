@@ -13,6 +13,9 @@ pub struct FileRow {
     pub stored_name: String,
     pub mime: String,
     pub size_bytes: i64,
+    /// Намаленото копие на снимка, ако има такова (`images::display_copy`).
+    pub display_name: Option<String>,
+    pub display_size: Option<i64>,
 }
 
 impl FileRow {
@@ -20,13 +23,26 @@ impl FileRow {
         self.mime == FileKind::Pdf.mime()
     }
 
+    /// Името на файла, който се показва на страниците: копието, ако има, иначе оригиналът.
+    pub fn shown_name(&self) -> &str {
+        self.display_name.as_deref().unwrap_or(&self.stored_name)
+    }
+
     pub fn size_display(&self) -> String {
-        let size = self.size_bytes as f64;
-        if size >= 1024.0 * 1024.0 {
-            format!("{:.1} MB", size / 1024.0 / 1024.0)
-        } else {
-            format!("{} KB", (size / 1024.0).ceil() as i64)
-        }
+        format_size(self.size_bytes)
+    }
+
+    pub fn display_size_text(&self) -> Option<String> {
+        self.display_size.map(format_size)
+    }
+}
+
+fn format_size(bytes: i64) -> String {
+    let size = bytes as f64;
+    if size >= 1024.0 * 1024.0 {
+        format!("{:.1} MB", size / 1024.0 / 1024.0)
+    } else {
+        format!("{} KB", (size / 1024.0).ceil() as i64)
     }
 }
 
@@ -57,7 +73,8 @@ pub async fn languages_with_files(db: &SqlitePool, product_id: i64) -> anyhow::R
 
 pub async fn files(db: &SqlitePool, product_id: i64, language: &str) -> anyhow::Result<Vec<FileRow>> {
     Ok(sqlx::query_as(
-        "SELECT f.id, f.original_name, f.stored_name, f.mime, f.size_bytes
+        "SELECT f.id, f.original_name, f.stored_name, f.mime, f.size_bytes,
+                f.display_name, f.display_size
            FROM files f JOIN manuals m ON m.id = f.manual_id
           WHERE m.product_id = ? AND m.language = ?
           ORDER BY f.sort_order, f.id",
@@ -73,6 +90,8 @@ pub struct NewFile<'a> {
     pub stored_name: &'a str,
     pub kind: FileKind,
     pub size_bytes: i64,
+    pub display_name: Option<&'a str>,
+    pub display_size: Option<i64>,
 }
 
 /// Добавя файл накрая на упътването, като създава упътването, ако го няма.
@@ -89,8 +108,9 @@ pub async fn add_file(
         .execute(&mut *tx)
         .await?;
     sqlx::query(
-        "INSERT INTO files (manual_id, original_name, stored_name, mime, size_bytes, sort_order)
-         SELECT m.id, ?, ?, ?, ?,
+        "INSERT INTO files (manual_id, original_name, stored_name, mime, size_bytes,
+                            display_name, display_size, sort_order)
+         SELECT m.id, ?, ?, ?, ?, ?, ?,
                 COALESCE((SELECT MAX(sort_order) + 1 FROM files WHERE manual_id = m.id), 0)
            FROM manuals m WHERE m.product_id = ? AND m.language = ?",
     )
@@ -98,6 +118,8 @@ pub async fn add_file(
     .bind(file.stored_name)
     .bind(file.kind.mime())
     .bind(file.size_bytes)
+    .bind(file.display_name)
+    .bind(file.display_size)
     .bind(product_id)
     .bind(language)
     .execute(&mut *tx)
@@ -122,16 +144,18 @@ pub async fn file_language(
     .await?)
 }
 
-/// Изтрива файла от базата и връща името му на диска. Изтрива и празното упътване.
-pub async fn delete_file(db: &SqlitePool, file_id: i64) -> anyhow::Result<Option<String>> {
+/// Изтрива файла от базата и връща имената му на диска (оригинал и копие).
+/// Изтрива и празното упътване.
+pub async fn delete_file(db: &SqlitePool, file_id: i64) -> anyhow::Result<Vec<String>> {
     let mut tx = db.begin().await?;
-    let row: Option<(String, i64)> =
-        sqlx::query_as("DELETE FROM files WHERE id = ? RETURNING stored_name, manual_id")
-            .bind(file_id)
-            .fetch_optional(&mut *tx)
-            .await?;
-    let Some((stored_name, manual_id)) = row else {
-        return Ok(None);
+    let row: Option<(String, Option<String>, i64)> = sqlx::query_as(
+        "DELETE FROM files WHERE id = ? RETURNING stored_name, display_name, manual_id",
+    )
+    .bind(file_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((stored_name, display_name, manual_id)) = row else {
+        return Ok(Vec::new());
     };
     sqlx::query("DELETE FROM manuals WHERE id = ? AND NOT EXISTS (SELECT 1 FROM files WHERE manual_id = ?)")
         .bind(manual_id)
@@ -139,7 +163,7 @@ pub async fn delete_file(db: &SqlitePool, file_id: i64) -> anyhow::Result<Option
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    Ok(Some(stored_name))
+    Ok([Some(stored_name), display_name].into_iter().flatten().collect())
 }
 
 /// Разменя файла със съседния нагоре или надолу. На края на списъка не прави нищо.
@@ -173,23 +197,29 @@ pub async fn move_file(db: &SqlitePool, file_id: i64, up: bool) -> anyhow::Resul
     Ok(())
 }
 
-/// Имената на диска на всички файлове на продукта (преди изтриването му).
+/// Имената на диска на всички файлове на продукта, с копията (преди изтриването му).
 pub async fn stored_names_for_product(db: &SqlitePool, product_id: i64) -> anyhow::Result<Vec<String>> {
     Ok(sqlx::query_scalar(
-        "SELECT f.stored_name FROM files f JOIN manuals m ON m.id = f.manual_id
-          WHERE m.product_id = ?",
+        "SELECT name FROM (
+             SELECT f.stored_name AS name, m.product_id FROM files f JOIN manuals m ON m.id = f.manual_id
+             UNION ALL
+             SELECT f.display_name, m.product_id FROM files f JOIN manuals m ON m.id = f.manual_id
+              WHERE f.display_name IS NOT NULL)
+          WHERE product_id = ?",
     )
     .bind(product_id)
     .fetch_all(db)
     .await?)
 }
 
-/// Данните за сервиране на файл по името му на диска.
-pub async fn find_by_stored_name(db: &SqlitePool, stored_name: &str) -> anyhow::Result<Option<FileRow>> {
+/// Файлът, на който е това име на диска: оригиналът или копието му.
+pub async fn find_by_disk_name(db: &SqlitePool, name: &str) -> anyhow::Result<Option<FileRow>> {
     Ok(sqlx::query_as(
-        "SELECT id, original_name, stored_name, mime, size_bytes FROM files WHERE stored_name = ?",
+        "SELECT id, original_name, stored_name, mime, size_bytes, display_name, display_size
+           FROM files WHERE stored_name = ? OR display_name = ?",
     )
-    .bind(stored_name)
+    .bind(name)
+    .bind(name)
     .fetch_optional(db)
     .await?)
 }
@@ -205,6 +235,8 @@ mod tests {
             stored_name: String::new(),
             mime: "application/pdf".into(),
             size_bytes,
+            display_name: None,
+            display_size: None,
         }
     }
 

@@ -52,8 +52,8 @@
       </svg>
     </a>
     {% else %}
-    <a href="/f/{{ file.stored_name }}" target="_blank" rel="noopener" class="block">
-      <img src="/f/{{ file.stored_name }}" alt="{{ product.name }} {{ loop.index }}"
+    <a href="/f/{{ file.shown_name() }}" target="_blank" rel="noopener" class="block">
+      <img src="/f/{{ file.shown_name() }}" alt="{{ product.name }} {{ loop.index }}"
            {% if loop.index > 2 %}loading="lazy"{% endif %} decoding="async"
            class="block h-auto w-full bg-slate-100 sm:rounded-2xl">
     </a>

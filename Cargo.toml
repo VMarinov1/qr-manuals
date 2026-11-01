@@ -12,7 +12,7 @@ axum = { version = "0.8", features = ["multipart"] }
 axum-extra = { version = "0.10", features = ["cookie"] }
 clap = { version = "4", features = ["derive", "env"] }
 dotenvy = "0.15"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 percent-encoding = "2"
 qrcode = "0.14"
 # OsRng за солта на паролите

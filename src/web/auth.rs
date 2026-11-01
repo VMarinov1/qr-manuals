@@ -44,7 +44,8 @@ async fn session_user(state: &AppState, jar: &CookieJar) -> AppResult<Option<Use
 }
 
 fn to_login(parts: &Parts) -> Response {
-    let target = format!("/login?next={}", encode_path(parts.uri.path()));
+    let back = parts.uri.path_and_query().map_or("/", |pq| pq.as_str());
+    let target = format!("/login?next={}", encode_path(back));
     // HTMX следва обикновения redirect вътре в страницата, затова му се казва изрично.
     if parts.headers.contains_key("hx-request") {
         let mut response = StatusCode::OK.into_response();
@@ -189,5 +190,6 @@ mod tests {
     fn encodes_non_path_characters() {
         assert_eq!(encode_path("/products/5"), "/products/5");
         assert_eq!(encode_path("/a b&c"), "/a%20b%26c");
+        assert_eq!(encode_path("/products/1?lang=bg"), "/products/1%3Flang%3Dbg");
     }
 }

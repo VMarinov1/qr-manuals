@@ -68,14 +68,17 @@
           {% if file.is_pdf() %}
           <span class="flex h-14 w-14 items-center justify-center rounded-md bg-red-50 text-xs font-bold text-red-700 ring-1 ring-red-100">PDF</span>
           {% else %}
-          <img src="/f/{{ file.stored_name }}" alt="" loading="lazy"
+          <img src="/f/{{ file.shown_name() }}" alt="" loading="lazy"
                class="h-14 w-14 rounded-md bg-slate-100 object-cover ring-1 ring-slate-200">
           {% endif %}
         </a>
         <div class="min-w-0 flex-1">
           <a href="/f/{{ file.stored_name }}" target="_blank" rel="noopener"
              class="block truncate text-sm font-medium hover:underline">{{ file.original_name }}</a>
-          <p class="text-xs text-slate-500">{{ file.size_display() }}</p>
+          <p class="text-xs text-slate-500">
+            {{ file.size_display() }}
+            {% if let Some(shown) = file.display_size_text() %}<span title="Намалено копие, което се показва на телефона">→ {{ shown }}</span>{% endif %}
+          </p>
         </div>
         <div class="flex shrink-0 items-center gap-1">
           <form method="post" action="/products/{{ product.id }}/files/{{ file.id }}/move">
