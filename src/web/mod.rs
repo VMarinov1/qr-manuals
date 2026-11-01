@@ -1,14 +1,23 @@
+mod auth;
 mod error;
 
 use std::sync::Arc;
 
 use askama::Template;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::get, Router};
+use axum::{
+    extract::{Request, State},
+    http::{header, Method, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Redirect, Response},
+    routing::{get, post},
+    Router,
+};
 use sqlx::SqlitePool;
 use tokio::net::TcpListener;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
 use crate::config::Config;
+use auth::CurrentUser;
 use error::{render, AppResult};
 
 #[derive(Clone)]
@@ -28,9 +37,13 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
     };
 
     let app = Router::new()
-        .route("/", get(index))
+        .route("/", get(|| async { Redirect::to("/products") }))
+        .route("/login", get(auth::login_page).post(auth::login_submit))
+        .route("/logout", post(auth::logout))
+        .route("/products", get(products))
         .route("/health", get(health))
         .nest_service("/static", static_dir)
+        .layer(middleware::from_fn_with_state(state.clone(), check_origin))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -42,18 +55,49 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Защита от CSRF: заявки, които променят данни, се приемат само от нашия сайт.
+/// Бисквитката е и SameSite=Lax, това е втори слой.
+async fn check_origin(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
+    if !safe {
+        if let Some(origin) = req.headers().get(header::ORIGIN) {
+            let origin = origin.to_str().unwrap_or_default();
+            let host = req
+                .headers()
+                .get(header::HOST)
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or_default();
+            let same_host = origin
+                .split_once("://")
+                .is_some_and(|(_, rest)| rest == host);
+            if !same_host && origin != state.config.public_base_url {
+                tracing::warn!(%origin, %host, "отхвърлена заявка от чужд произход");
+                return (StatusCode::FORBIDDEN, "Забранено").into_response();
+            }
+        }
+    }
+    next.run(req).await
+}
+
 #[derive(Template)]
-#[template(path = "index.html")]
-struct IndexTemplate {
+#[template(path = "products.html")]
+struct ProductsTemplate {
+    user: crate::auth::User,
     product_count: i64,
 }
 
-// Временна начална страница, докато няма вход и списък с продукти.
-async fn index(State(state): State<AppState>) -> AppResult<impl IntoResponse> {
+// Временна страница, докато няма списък с продукти.
+async fn products(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> AppResult<impl IntoResponse> {
     let product_count = sqlx::query_scalar("SELECT COUNT(*) FROM products")
         .fetch_one(&state.db)
         .await?;
-    render(&IndexTemplate { product_count })
+    render(&ProductsTemplate {
+        user,
+        product_count,
+    })
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {

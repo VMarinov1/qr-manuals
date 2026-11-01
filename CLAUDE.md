@@ -19,6 +19,14 @@ Rust, Axum 0.8, Askama 0.14 (шаблони в `templates/`), HTMX, Tailwind v4 
 - Файловете са в `UPLOAD_DIR` със случайно име (`files.stored_name`).
 - Езиците са в таблица `languages`. Нов език се добавя с миграция.
 - Нова схема = нова миграция в `migrations/`. Старите не се редактират.
+- Защитена страница = handler с аргумент `CurrentUser` (`src/web/auth.rs`). Без вход пренасочва към `/login?next=...`, а при HTMX заявка връща `HX-Redirect`.
+- Сесии: случаен токен в бисквитка `qrm_session` (HttpOnly, SameSite=Lax, Secure при https `PUBLIC_BASE_URL`), в базата е само SHA-256 хешът му. Валидност 30 дни.
+- CSRF: middleware `check_origin` отхвърля POST/PUT/DELETE с чужд `Origin`.
+
+## Тестове
+```bash
+docker run --rm -v "$PWD":/app -v qrm-cargo-target:/app/target -v qrm-cargo-registry:/usr/local/cargo/registry -w /app rust:1-bookworm cargo test
+```
 
 ## Билд и стартиране
 Rust не е инсталиран локално, билдва се през Docker:
@@ -32,7 +40,7 @@ docker compose exec app qr-manuals create-admin admin@example.com
 
 ## Ред на работа
 1. ✅ Скелет, база, миграции, Docker, `create-admin`
-2. Вход и сесии (таблица `sessions`, HttpOnly бисквитка)
+2. ✅ Вход и сесии
 3. Продукти
 4. Упътвания по езици и качване на файлове
 5. QR код и публична страница

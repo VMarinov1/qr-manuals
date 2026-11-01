@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Вход · QR упътвания{% endblock %}
+
+{% block content %}
+<main class="flex min-h-screen items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <h1 class="mb-6 text-center text-2xl font-semibold tracking-tight">QR упътвания</h1>
+
+    <form method="post" action="/login"
+          class="space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      {% if let Some(error) = error %}
+      <p role="alert" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
+      {% endif %}
+
+      <input type="hidden" name="next" value="{{ next }}">
+
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">Email</span>
+        <input type="email" name="email" value="{{ email }}" required autocomplete="username"
+               {% if email.is_empty() %}autofocus{% endif %}
+               class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200">
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">Парола</span>
+        <input type="password" name="password" required autocomplete="current-password"
+               {% if !email.is_empty() %}autofocus{% endif %}
+               class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200">
+      </label>
+
+      <button type="submit"
+              class="w-full rounded-md bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400">
+        Вход
+      </button>
+    </form>
+  </div>
+</main>
+{% endblock %}
