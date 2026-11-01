@@ -18,7 +18,8 @@ RUN mkdir src && echo 'fn main() {}' > src/main.rs \
  && rm -rf src
 
 COPY . .
-RUN touch src/main.rs && cargo build --release --locked
+# Тестовете спират билда, ако нещо е счупено, преди да стигне до сървъра.
+RUN touch src/main.rs && cargo test --release --locked && cargo build --release --locked
 RUN mkdir -p static && tailwindcss -i assets/app.css -o static/app.css --minify
 
 FROM debian:bookworm-slim
@@ -35,4 +36,5 @@ ENV BIND_ADDR=0.0.0.0:8080 \
 USER app
 VOLUME /data
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["qr-manuals", "health"]
 CMD ["qr-manuals", "serve"]

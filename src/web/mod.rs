@@ -6,8 +6,9 @@ mod products;
 mod public;
 mod rate_limit;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use anyhow::Context;
 use axum::{
     extract::{DefaultBodyLimit, Request, State},
     http::{header, Method, StatusCode},
@@ -98,6 +99,24 @@ async fn check_origin(State(state): State<AppState>, req: Request, next: Next) -
         }
     }
     next.run(req).await
+}
+
+/// Healthcheck за Docker: GET /health към собствения порт.
+pub async fn health_check(port: u16) -> anyhow::Result<()> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let check = async {
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await?;
+        stream
+            .write_all(b"GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n")
+            .await?;
+        let mut head = [0u8; 12];
+        stream.read_exact(&mut head).await?;
+        anyhow::ensure!(head.ends_with(b" 200"), "отговор {}", String::from_utf8_lossy(&head));
+        Ok(())
+    };
+    tokio::time::timeout(Duration::from_secs(5), check)
+        .await
+        .context("няма отговор")?
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {

@@ -3,3 +3,4 @@ data
 .git
 .env
 static/app.css
+qr-manuals.env

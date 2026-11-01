@@ -30,6 +30,15 @@ enum Command {
         #[arg(long, env = "ADMIN_PASSWORD", hide_env_values = true)]
         password: Option<String>,
     },
+    /// Прави копие на базата в папка и пази последните `keep` копия
+    Backup {
+        #[arg(default_value = "/data/backups")]
+        dir: std::path::PathBuf,
+        #[arg(long, default_value_t = 14)]
+        keep: usize,
+    },
+    /// Проверява дали сървърът отговаря (за healthcheck на Docker)
+    Health,
 }
 
 #[tokio::main]
@@ -44,10 +53,21 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     let config = config::Config::from_env()?;
+    let command = cli.command.unwrap_or(Command::Serve);
+    if let Command::Health = command {
+        // Без база: проверява самия работещ сървър.
+        return web::health_check(config.bind_addr.port()).await;
+    }
     let pool = db::connect(&config.database_url).await?;
 
-    match cli.command.unwrap_or(Command::Serve) {
+    match command {
+        Command::Health => unreachable!(),
         Command::Serve => web::serve(config, pool).await,
+        Command::Backup { dir, keep } => {
+            let path = db::backup(&pool, &dir, keep).await?;
+            println!("{}", path.display());
+            Ok(())
+        }
         Command::CreateAdmin { email, password } => {
             let password = match password {
                 Some(password) => password,

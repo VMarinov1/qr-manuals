@@ -46,11 +46,14 @@ docker run --rm -v "$PWD":/app -v qrm-cargo-target:/app/target -v qrm-cargo-regi
 Rust не е инсталиран локално, билдва се през Docker:
 
 ```bash
-docker compose up -d --build
-docker compose exec app qr-manuals create-admin admin@example.com
+cp qr-manuals.env.example qr-manuals.env   # локално: PUBLIC_BASE_URL=http://localhost:5200, TRUST_PROXY=false
+docker compose up -d --build               # билдът пуска и тестовете
+docker compose exec qr-manuals qr-manuals create-admin admin@example.com
 ```
 
-Конфигурация: `.env.example`. Данните (база и файлове) са във volume `/data`.
+Приложението е на `127.0.0.1:5200`. Данните (база, файлове, `backups/`) са в `./data`.
+Пускане на сървъра, nginx, backup и възстановяване: `DEPLOY.md`. Production върви на сървъра на ORTHOTEH зад nginx (`deploy/nginx/qr-manuals.conf`).
+Подкоманди на бинарния файл: `serve` (по подразбиране), `create-admin`, `backup [папка] --keep N`, `health`.
 
 ## Ред на работа
 1. ✅ Скелет, база, миграции, Docker, `create-admin`

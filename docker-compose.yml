@@ -1,17 +1,17 @@
+# Production и локално. nginx на хоста е единственият вход (deploy/nginx/qr-manuals.conf).
 services:
-  app:
-    build: .
+  qr-manuals:
+    container_name: qr-manuals
     image: qr-manuals
+    build: .
     restart: unless-stopped
+    env_file:
+      - qr-manuals.env # gitignored, само на сървъра. Пример: qr-manuals.env.example
     ports:
-      - "8080:8080"
-    environment:
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
-      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
-      TRUST_PROXY: ${TRUST_PROXY:-false}
-      RUST_LOG: ${RUST_LOG:-qr_manuals=info,tower_http=info}
+      # Само 127.0.0.1. С TRUST_PROXY=true приложението вярва на X-Forwarded-For,
+      # затова никой не трябва да може да го достигне, заобикаляйки nginx.
+      - 127.0.0.1:5200:8080
     volumes:
-      - qr-data:/data
-
-volumes:
-  qr-data:
+      # База, качени файлове и копия на базата. Собственик трябва да е uid 10001
+      # (потребителят в контейнера): sudo chown -R 10001:10001 data
+      - ./data:/data

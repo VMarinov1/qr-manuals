@@ -3,3 +3,4 @@
 /static/app.css
 .env
 .DS_Store
+qr-manuals.env
