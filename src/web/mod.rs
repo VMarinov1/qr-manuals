@@ -1,9 +1,9 @@
 mod auth;
 mod error;
+mod products;
 
 use std::sync::Arc;
 
-use askama::Template;
 use axum::{
     extract::{Request, State},
     http::{header, Method, StatusCode},
@@ -17,8 +17,6 @@ use tokio::net::TcpListener;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
 use crate::config::Config;
-use auth::CurrentUser;
-use error::{render, AppResult};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -40,7 +38,10 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
         .route("/", get(|| async { Redirect::to("/products") }))
         .route("/login", get(auth::login_page).post(auth::login_submit))
         .route("/logout", post(auth::logout))
-        .route("/products", get(products))
+        .route("/products", get(products::list).post(products::create))
+        .route("/products/new", get(products::new_page))
+        .route("/products/{id}", get(products::show).post(products::update))
+        .route("/products/{id}/delete", post(products::delete))
         .route("/health", get(health))
         .nest_service("/static", static_dir)
         .layer(middleware::from_fn_with_state(state.clone(), check_origin))
@@ -77,27 +78,6 @@ async fn check_origin(State(state): State<AppState>, req: Request, next: Next) -
         }
     }
     next.run(req).await
-}
-
-#[derive(Template)]
-#[template(path = "products.html")]
-struct ProductsTemplate {
-    user: crate::auth::User,
-    product_count: i64,
-}
-
-// Временна страница, докато няма списък с продукти.
-async fn products(
-    State(state): State<AppState>,
-    CurrentUser(user): CurrentUser,
-) -> AppResult<impl IntoResponse> {
-    let product_count = sqlx::query_scalar("SELECT COUNT(*) FROM products")
-        .fetch_one(&state.db)
-        .await?;
-    render(&ProductsTemplate {
-        user,
-        product_count,
-    })
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {

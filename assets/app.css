@@ -1,2 +1,33 @@
 @import "tailwindcss";
 @source "../templates";
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-slate-900 text-white hover:bg-slate-700;
+}
+@utility btn-secondary {
+  @apply btn bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50;
+}
+@utility btn-danger {
+  @apply btn bg-white text-red-700 ring-1 ring-red-200 hover:bg-red-50;
+}
+@utility card {
+  @apply rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6;
+}
+@utility label {
+  @apply text-sm font-medium text-slate-700;
+}
+@utility hint {
+  @apply mt-1 block text-xs text-slate-500;
+}
+@utility input {
+  @apply mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200;
+}
+@utility input-error {
+  @apply border-red-400 focus:border-red-500 focus:ring-red-100;
+}
+@utility field-error {
+  @apply mt-1 block text-sm text-red-700;
+}

@@ -1,6 +1,7 @@
 mod auth;
 mod config;
 mod db;
+mod products;
 mod web;
 
 use clap::{Parser, Subcommand};

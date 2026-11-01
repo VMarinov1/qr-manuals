@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+
+{% block title %}Продукти · QR упътвания{% endblock %}
+
+{% block main %}
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <h1 class="text-xl font-semibold">Продукти</h1>
+  <a href="/products/new" class="btn-primary">+ Нов продукт</a>
+</div>
+
+<form method="get" action="/products" role="search" class="mt-4">
+  <input type="search" name="q" value="{{ search }}" placeholder="Търси по име или SKU" autocomplete="off"
+         aria-label="Търсене"
+         hx-get="/products" hx-trigger="input changed delay:250ms, search"
+         hx-target="#product-list" hx-select="#product-list" hx-swap="outerHTML" hx-push-url="true"
+         class="input max-w-md">
+</form>
+
+<div id="product-list" class="mt-4">
+  {% if products.is_empty() %}
+  <div class="rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-500">
+    {% if search.is_empty() %}
+    Още няма продукти. <a href="/products/new" class="font-medium text-slate-900 underline">Добави първия</a>.
+    {% else %}
+    Няма продукти за „{{ search }}“.
+    {% endif %}
+  </div>
+  {% else %}
+  <ul class="divide-y divide-slate-200 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+    {% for product in products %}
+    <li>
+      <a href="/products/{{ product.id }}" class="flex items-center gap-4 px-4 py-3 hover:bg-slate-50">
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-medium">{{ product.name }}</p>
+          {% if let Some(sku) = product.sku.as_deref() %}
+          <p class="truncate text-sm text-slate-500">{{ sku }}</p>
+          {% endif %}
+        </div>
+        <div class="flex shrink-0 flex-wrap justify-end gap-1">
+          {% for code in product.language_codes() %}
+          <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium uppercase text-slate-700">{{ code }}</span>
+          {% else %}
+          <span class="text-xs text-slate-400">без упътване</span>
+          {% endfor %}
+        </div>
+        <span class="hidden w-24 shrink-0 text-right text-sm text-slate-500 sm:block">{{ product.created_date() }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="mt-2 text-xs text-slate-500">Общо: {{ products.len() }}</p>
+  {% endif %}
+</div>
+{% endblock %}

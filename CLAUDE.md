@@ -22,6 +22,11 @@ Rust, Axum 0.8, Askama 0.14 (шаблони в `templates/`), HTMX, Tailwind v4 
 - Защитена страница = handler с аргумент `CurrentUser` (`src/web/auth.rs`). Без вход пренасочва към `/login?next=...`, а при HTMX заявка връща `HX-Redirect`.
 - Сесии: случаен токен в бисквитка `qrm_session` (HttpOnly, SameSite=Lax, Secure при https `PUBLIC_BASE_URL`), в базата е само SHA-256 хешът му. Валидност 30 дни.
 - CSRF: middleware `check_origin` отхвърля POST/PUT/DELETE с чужд `Origin`.
+- Търсенето е по `products.search_text` (име + SKU с малки букви, попълва се от `ProductInput::search_text`), защото `LIKE` в SQLite не прави кирилицата case-insensitive.
+- Slug: 8 символа без двусмислени знаци (0/O, 1/l/I), генерира се в `products::new_slug`.
+- Формите са обикновен POST + redirect. При грешка страницата се рендира отново с 422 и `FormErrors`. HTMX се ползва само там, където има полза (търсене на живо с `hx-select`).
+- Общите класове (`btn-primary`, `card`, `input`...) са `@utility` в `assets/app.css`.
+- HTMX е в `static/vendor/htmx-2.0.4.min.js`, без CDN.
 
 ## Тестове
 ```bash
@@ -41,6 +46,6 @@ docker compose exec app qr-manuals create-admin admin@example.com
 ## Ред на работа
 1. ✅ Скелет, база, миграции, Docker, `create-admin`
 2. ✅ Вход и сесии
-3. Продукти
+3. ✅ Продукти
 4. Упътвания по езици и качване на файлове
 5. QR код и публична страница

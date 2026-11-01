@@ -3,19 +3,27 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 
-/// Грешка в handler. Логва се пълната причина, а потребителят вижда общо съобщение.
-pub struct AppError(anyhow::Error);
+pub enum AppError {
+    NotFound,
+    /// Логва се пълната причина, а потребителят вижда общо съобщение.
+    Internal(anyhow::Error),
+}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        tracing::error!("{:#}", self.0);
-        (StatusCode::INTERNAL_SERVER_ERROR, "Възникна грешка").into_response()
+        match self {
+            AppError::NotFound => (StatusCode::NOT_FOUND, "Не е намерено").into_response(),
+            AppError::Internal(err) => {
+                tracing::error!("{err:#}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Възникна грешка").into_response()
+            }
+        }
     }
 }
 
 impl<E: Into<anyhow::Error>> From<E> for AppError {
     fn from(err: E) -> Self {
-        Self(err.into())
+        Self::Internal(err.into())
     }
 }
 

@@ -1,0 +1,33 @@
+<div class="space-y-4">
+  <label class="block">
+    <span class="label">Име</span>
+    <input name="name" value="{{ form.name }}" required maxlength="200"
+           class="input {% if errors.name.is_some() %}input-error{% endif %}">
+    {% if let Some(error) = errors.name %}<span class="field-error">{{ error }}</span>{% endif %}
+  </label>
+
+  <label class="block">
+    <span class="label">SKU <span class="font-normal text-slate-400">(по избор)</span></span>
+    <input name="sku" value="{{ form.sku }}" maxlength="64"
+           class="input {% if errors.sku.is_some() %}input-error{% endif %}">
+    {% if let Some(error) = errors.sku %}<span class="field-error">{{ error }}</span>{% endif %}
+  </label>
+
+  <label class="block">
+    <span class="label">Език по подразбиране</span>
+    <select name="default_language" class="input {% if errors.default_language.is_some() %}input-error{% endif %}">
+      {% for language in languages %}
+      <option value="{{ language.code }}" {% if language.code == form.default_language %}selected{% endif %}>{{ language.name }}</option>
+      {% endfor %}
+    </select>
+    {% if let Some(error) = errors.default_language %}<span class="field-error">{{ error }}</span>{% endif %}
+    <span class="hint">Показва се, когато няма упътване на езика на телефона.</span>
+  </label>
+
+  <label class="block">
+    <span class="label">Описание <span class="font-normal text-slate-400">(по избор, вижда се само тук)</span></span>
+    <textarea name="description" rows="3" maxlength="2000"
+              class="input {% if errors.description.is_some() %}input-error{% endif %}">{{ form.description }}</textarea>
+    {% if let Some(error) = errors.description %}<span class="field-error">{{ error }}</span>{% endif %}
+  </label>
+</div>
