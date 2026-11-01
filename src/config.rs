@@ -11,6 +11,8 @@ pub struct Config {
     /// Адресът, към който сочат публичните линкове и QR кодовете, без `/` накрая.
     pub public_base_url: String,
     pub max_upload_bytes: usize,
+    /// Приложението е зад reverse proxy и адресът на клиента е в `X-Forwarded-For`.
+    pub trust_proxy: bool,
 }
 
 impl Config {
@@ -30,6 +32,10 @@ impl Config {
                 .trim_end_matches('/')
                 .to_owned(),
             max_upload_bytes: max_upload_mb * 1024 * 1024,
+            trust_proxy: matches!(
+                var("TRUST_PROXY", "false").to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes"
+            ),
         })
     }
 }

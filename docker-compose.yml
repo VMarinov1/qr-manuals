@@ -8,6 +8,7 @@ services:
     environment:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       RUST_LOG: ${RUST_LOG:-qr_manuals=info,tower_http=info}
     volumes:
       - qr-data:/data

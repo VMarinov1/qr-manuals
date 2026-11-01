@@ -1,7 +1,9 @@
+use std::{net::SocketAddr, time::Instant};
+
 use askama::Template;
 use axum::{
-    extract::{FromRequestParts, Query, State},
-    http::{request::Parts, HeaderValue, StatusCode},
+    extract::{ConnectInfo, FromRequestParts, Query, State},
+    http::{header, request::Parts, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Redirect, Response},
     Form,
 };
@@ -10,6 +12,7 @@ use serde::Deserialize;
 
 use super::{
     error::{render, AppError, AppResult},
+    rate_limit::client_ip,
     AppState,
 };
 use crate::auth::{self, User, SESSION_DAYS};
@@ -58,7 +61,7 @@ fn to_login(parts: &Parts) -> Response {
 struct LoginTemplate {
     email: String,
     next: String,
-    error: Option<&'static str>,
+    error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -92,21 +95,42 @@ pub struct LoginForm {
 
 pub async fn login_submit(
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     jar: CookieJar,
     Form(form): Form<LoginForm>,
 ) -> AppResult<Response> {
     let next = safe_next(form.next.as_deref()).to_owned();
+    let email = form.email.trim().to_owned();
+    let ip = client_ip(peer, &headers, state.config.trust_proxy);
+    let limiter = &state.login_limiter;
 
-    let Some(user) = auth::authenticate(&state.db, &form.email, &form.password).await? else {
-        tracing::warn!(email = %form.email.trim(), "неуспешен вход");
+    if let Some(wait) = limiter.blocked(ip, &email, Instant::now()) {
+        let minutes = wait.as_secs().div_ceil(60).max(1);
+        tracing::warn!(%email, %ip, minutes, "вход блокиран след много грешни опити");
         let page = render(&LoginTemplate {
-            email: form.email.trim().to_owned(),
+            email,
             next,
-            error: Some("Грешен email или парола."),
+            error: Some(format!(
+                "Твърде много неуспешни опити. Опитай пак след {minutes} мин."
+            )),
+        })?;
+        let retry_after = [(header::RETRY_AFTER, wait.as_secs().max(1).to_string())];
+        return Ok((StatusCode::TOO_MANY_REQUESTS, retry_after, page).into_response());
+    }
+
+    let Some(user) = auth::authenticate(&state.db, &email, &form.password).await? else {
+        limiter.record_failure(ip, &email, Instant::now());
+        tracing::warn!(%email, %ip, "неуспешен вход");
+        let page = render(&LoginTemplate {
+            email,
+            next,
+            error: Some("Грешен email или парола.".to_owned()),
         })?;
         return Ok((StatusCode::UNAUTHORIZED, page).into_response());
     };
 
+    limiter.record_success(ip, &email);
     let token = auth::create_session(&state.db, user.id).await?;
     let cookie = Cookie::build((SESSION_COOKIE, token))
         .path("/")

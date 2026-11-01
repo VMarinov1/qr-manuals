@@ -22,6 +22,7 @@ Rust, Axum 0.8, Askama 0.14 (шаблони в `templates/`), HTMX, Tailwind v4 
 - Защитена страница = handler с аргумент `CurrentUser` (`src/web/auth.rs`). Без вход пренасочва към `/login?next=...`, а при HTMX заявка връща `HX-Redirect`.
 - Сесии: случаен токен в бисквитка `qrm_session` (HttpOnly, SameSite=Lax, Secure при https `PUBLIC_BASE_URL`), в базата е само SHA-256 хешът му. Валидност 30 дни.
 - CSRF: middleware `check_origin` отхвърля POST/PUT/DELETE с чужд `Origin`.
+- Ограничение на входа (`src/web/rate_limit.rs`, в паметта): 10 грешни опита от IP или 30 за email за 15 мин → 429 с `Retry-After`. Блокиран опит не проверява паролата. Успешен вход нулира броячите. Зад reverse proxy трябва `TRUST_PROXY=true`, иначе всички клиенти са с IP-то на proxy-то.
 - Търсенето е по `products.search_text` (име + SKU с малки букви, попълва се от `ProductInput::search_text`), защото `LIKE` в SQLite не прави кирилицата case-insensitive.
 - Slug: 8 символа без двусмислени знаци (0/O, 1/l/I), генерира се в `products::new_slug`.
 - Формите са обикновен POST + redirect. При грешка страницата се рендира отново с 422 и `FormErrors`. HTMX се ползва само там, където има полза (търсене на живо с `hx-select`).

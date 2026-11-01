@@ -4,8 +4,9 @@ mod files;
 mod flash;
 mod products;
 mod public;
+mod rate_limit;
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{DefaultBodyLimit, Request, State},
@@ -25,6 +26,7 @@ use crate::config::Config;
 pub struct AppState {
     pub db: SqlitePool,
     pub config: Arc<Config>,
+    pub login_limiter: Arc<rate_limit::LoginLimiter>,
 }
 
 pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
@@ -38,6 +40,7 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
     let state = AppState {
         db,
         config: Arc::new(config),
+        login_limiter: Arc::default(),
     };
 
     let app = Router::new()
@@ -67,7 +70,7 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
 
     let listener = TcpListener::bind(addr).await?;
     tracing::info!("слуша на http://{addr}");
-    axum::serve(listener, app)
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
