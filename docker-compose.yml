@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    image: qr-manuals
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
+      RUST_LOG: ${RUST_LOG:-qr_manuals=info,tower_http=info}
+    volumes:
+      - qr-data:/data
+
+volumes:
+  qr-data:
