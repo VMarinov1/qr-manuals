@@ -29,5 +29,15 @@
       setTimeout(() => { button.textContent = label; }, 1500);
     });
   });
+
+  // Форма с data-busy="текст" заключва бутона си, докато се изпраща (напр. при качване).
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!form.dataset.busy || event.defaultPrevented) return;
+    const button = form.querySelector('button[type="submit"]');
+    if (!button) return;
+    // След изпращането, за да не попречи disabled на самото изпращане.
+    setTimeout(() => { button.disabled = true; button.textContent = form.dataset.busy; });
+  });
 </script>
 {% endblock %}

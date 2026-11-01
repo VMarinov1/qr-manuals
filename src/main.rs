@@ -1,7 +1,9 @@
 mod auth;
 mod config;
 mod db;
+mod manuals;
 mod products;
+mod storage;
 mod web;
 
 use clap::{Parser, Subcommand};

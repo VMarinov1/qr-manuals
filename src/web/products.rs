@@ -5,19 +5,24 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     Form,
 };
+use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 
 use super::{
     auth::CurrentUser,
     error::{render, AppError, AppResult},
+    files::MAX_FILES_PER_UPLOAD,
+    flash::Flash,
     AppState,
 };
 use crate::{
     auth::User,
+    manuals::{self, FileRow},
     products::{
         self, display_date, FormErrors, Language, Product, ProductForm, ProductListItem,
         SaveError,
     },
+    storage,
 };
 
 #[derive(Template)]
@@ -96,6 +101,13 @@ pub async fn create(
     Ok((StatusCode::UNPROCESSABLE_ENTITY, page).into_response())
 }
 
+struct LanguageTab {
+    code: String,
+    name: String,
+    file_count: i64,
+    active: bool,
+}
+
 #[derive(Template)]
 #[template(path = "products/show.html")]
 struct ShowTemplate {
@@ -105,19 +117,82 @@ struct ShowTemplate {
     languages: Vec<Language>,
     form: ProductForm,
     errors: FormErrors,
-    saved: bool,
+    flash: Option<Flash>,
+    tabs: Vec<LanguageTab>,
+    files: Vec<FileRow>,
+    max_upload_mb: usize,
+    max_files: usize,
 }
 
 impl ShowTemplate {
     fn created_date(&self) -> String {
         display_date(&self.product.created_at)
     }
+
+    fn active_tab(&self) -> &LanguageTab {
+        self.tabs.iter().find(|t| t.active).unwrap_or(&self.tabs[0])
+    }
+}
+
+/// Сглобява страницата на продукта. Активният език е поисканият, иначе първият с
+/// упътване, иначе езикът по подразбиране.
+async fn show_page(
+    state: &AppState,
+    user: User,
+    product: Product,
+    form: ProductForm,
+    errors: FormErrors,
+    language: Option<&str>,
+    flash: Option<Flash>,
+) -> AppResult<ShowTemplate> {
+    let languages = products::languages(&state.db).await?;
+    let counts = manuals::file_counts(&state.db, product.id).await?;
+    let count_for = |code: &str| {
+        counts
+            .iter()
+            .find(|(c, _)| c == code)
+            .map_or(0, |(_, n)| *n)
+    };
+
+    let active = language
+        .filter(|code| languages.iter().any(|l| l.code == *code))
+        .or_else(|| {
+            languages
+                .iter()
+                .find(|l| count_for(&l.code) > 0)
+                .map(|l| l.code.as_str())
+        })
+        .unwrap_or(&product.default_language)
+        .to_owned();
+
+    let tabs = languages
+        .iter()
+        .map(|l| LanguageTab {
+            code: l.code.clone(),
+            name: l.name.clone(),
+            file_count: count_for(&l.code),
+            active: l.code == active,
+        })
+        .collect();
+
+    Ok(ShowTemplate {
+        user,
+        public_url: format!("{}/m/{}", state.config.public_base_url, product.public_slug),
+        files: manuals::files(&state.db, product.id, &active).await?,
+        product,
+        languages,
+        form,
+        errors,
+        flash,
+        tabs,
+        max_upload_mb: state.config.max_upload_bytes / 1024 / 1024,
+        max_files: MAX_FILES_PER_UPLOAD,
+    })
 }
 
 #[derive(Deserialize)]
 pub struct ShowQuery {
-    #[serde(default)]
-    saved: Option<String>,
+    lang: Option<String>,
 }
 
 pub async fn show(
@@ -125,23 +200,29 @@ pub async fn show(
     CurrentUser(user): CurrentUser,
     Path(id): Path<i64>,
     Query(query): Query<ShowQuery>,
-) -> AppResult<impl IntoResponse> {
+    jar: CookieJar,
+) -> AppResult<Response> {
     let product = products::get(&state.db, id).await?.ok_or(AppError::NotFound)?;
-    render(&ShowTemplate {
+    let (jar, flash) = Flash::take(jar);
+    let form = ProductForm::from(&product);
+    let page = show_page(
+        &state,
         user,
-        public_url: public_url(&state, &product),
-        languages: products::languages(&state.db).await?,
-        form: ProductForm::from(&product),
-        errors: FormErrors::default(),
-        saved: query.saved.is_some(),
         product,
-    })
+        form,
+        FormErrors::default(),
+        query.lang.as_deref(),
+        flash,
+    )
+    .await?;
+    Ok((jar, render(&page)?).into_response())
 }
 
 pub async fn update(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<i64>,
+    jar: CookieJar,
     Form(form): Form<ProductForm>,
 ) -> AppResult<Response> {
     let product = products::get(&state.db, id).await?.ok_or(AppError::NotFound)?;
@@ -150,23 +231,16 @@ pub async fn update(
         Ok(input) => match products::update(&state.db, id, &input).await {
             Ok(true) => {
                 tracing::info!(id, by = %user.email, "редактиран продукт");
-                return Ok(Redirect::to(&format!("/products/{id}?saved=1")).into_response());
+                let jar = Flash::ok("Промените са запазени.").set(jar);
+                return Ok((jar, Redirect::to(&format!("/products/{id}"))).into_response());
             }
             Ok(false) => return Err(AppError::NotFound),
             Err(err) => save_error(err)?,
         },
         Err(errors) => errors,
     };
-    let page = render(&ShowTemplate {
-        user,
-        public_url: public_url(&state, &product),
-        languages,
-        form,
-        errors,
-        saved: false,
-        product,
-    })?;
-    Ok((StatusCode::UNPROCESSABLE_ENTITY, page).into_response())
+    let page = show_page(&state, user, product, form, errors, None, None).await?;
+    Ok((StatusCode::UNPROCESSABLE_ENTITY, render(&page)?).into_response())
 }
 
 pub async fn delete(
@@ -174,10 +248,12 @@ pub async fn delete(
     CurrentUser(user): CurrentUser,
     Path(id): Path<i64>,
 ) -> AppResult<Response> {
+    let stored_names = manuals::stored_names_for_product(&state.db, id).await?;
     if !products::delete(&state.db, id).await? {
         return Err(AppError::NotFound);
     }
-    tracing::info!(id, by = %user.email, "изтрит продукт");
+    storage::remove_files(&state.config.upload_dir, &stored_names).await;
+    tracing::info!(id, files = stored_names.len(), by = %user.email, "изтрит продукт");
     Ok(Redirect::to("/products").into_response())
 }
 
@@ -190,8 +266,4 @@ fn save_error(err: SaveError) -> AppResult<FormErrors> {
         }),
         SaveError::Other(err) => Err(err.into()),
     }
-}
-
-fn public_url(state: &AppState, product: &Product) -> String {
-    format!("{}/m/{}", state.config.public_base_url, product.public_slug)
 }

@@ -1,11 +1,13 @@
 mod auth;
 mod error;
+mod files;
+mod flash;
 mod products;
 
 use std::sync::Arc;
 
 use axum::{
-    extract::{Request, State},
+    extract::{DefaultBodyLimit, Request, State},
     http::{header, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Redirect, Response},
@@ -26,9 +28,12 @@ pub struct AppState {
 
 pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
     tokio::fs::create_dir_all(&config.upload_dir).await?;
+    crate::storage::remove_temp_files(&config.upload_dir).await?;
 
     let addr = config.bind_addr;
     let static_dir = ServeDir::new(&config.static_dir);
+    // Лимитът на файл се проверява при четенето, това е таванът за цялата заявка.
+    let upload_limit = config.max_upload_bytes * files::MAX_FILES_PER_UPLOAD + 1024 * 1024;
     let state = AppState {
         db,
         config: Arc::new(config),
@@ -42,6 +47,13 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
         .route("/products/new", get(products::new_page))
         .route("/products/{id}", get(products::show).post(products::update))
         .route("/products/{id}/delete", post(products::delete))
+        .route(
+            "/products/{id}/manuals/{lang}/files",
+            post(files::upload).layer(DefaultBodyLimit::max(upload_limit)),
+        )
+        .route("/products/{id}/files/{file_id}/move", post(files::reorder))
+        .route("/products/{id}/files/{file_id}/delete", post(files::delete))
+        .route("/f/{stored_name}", get(files::serve))
         .route("/health", get(health))
         .nest_service("/static", static_dir)
         .layer(middleware::from_fn_with_state(state.clone(), check_origin))

@@ -11,11 +11,14 @@
   </p>
 </div>
 
-{% if saved %}
-<p role="status" class="mt-4 max-w-2xl rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Промените са запазени.</p>
+{% if let Some(flash) = flash %}
+<div role="status"
+     class="mt-4 max-w-3xl rounded-md px-3 py-2 text-sm {% if flash.error %}bg-amber-50 text-amber-900{% else %}bg-emerald-50 text-emerald-800{% endif %}">
+  {% for line in flash.lines %}<p class="break-words">{{ line }}</p>{% endfor %}
+</div>
 {% endif %}
 
-<div class="mt-4 max-w-2xl space-y-4">
+<div class="mt-4 max-w-3xl space-y-4">
   <section class="card">
     <h2 class="font-semibold">Публичен линк</h2>
     <p class="mt-1 text-sm text-slate-500">Не се променя, дори да смениш файловете.</p>
@@ -27,6 +30,78 @@
         <a href="{{ public_url }}" target="_blank" rel="noopener" class="btn-secondary flex-1 sm:flex-none">Отвори</a>
       </div>
     </div>
+  </section>
+
+  {% let tab = active_tab() %}
+  <section id="manuals" class="card">
+    <h2 class="font-semibold">Упътвания</h2>
+
+    <nav class="mt-3 flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Езици">
+      {% for t in tabs %}
+      <a href="/products/{{ product.id }}?lang={{ t.code }}#manuals" title="{{ t.name }}"
+         {% if t.active %}aria-current="page"{% endif %}
+         class="-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium uppercase {% if t.active %}border-slate-900 text-slate-900{% else %}border-transparent text-slate-500 hover:text-slate-800{% endif %}">
+        {{ t.code }}
+        {% if t.file_count > 0 %}
+        <span class="rounded-full bg-slate-100 px-1.5 text-xs font-normal normal-case text-slate-600">{{ t.file_count }}</span>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </nav>
+
+    {% if files.is_empty() %}
+    <p class="mt-4 text-sm text-slate-500">Няма упътване на {{ tab.name }}. Качи снимки или PDF файлове.</p>
+    {% else %}
+    <ul class="mt-4 divide-y divide-slate-100">
+      {% for file in files %}
+      <li class="flex items-center gap-3 py-2">
+        <a href="/f/{{ file.stored_name }}" target="_blank" rel="noopener" class="shrink-0">
+          {% if file.is_pdf() %}
+          <span class="flex h-14 w-14 items-center justify-center rounded-md bg-red-50 text-xs font-bold text-red-700 ring-1 ring-red-100">PDF</span>
+          {% else %}
+          <img src="/f/{{ file.stored_name }}" alt="" loading="lazy"
+               class="h-14 w-14 rounded-md bg-slate-100 object-cover ring-1 ring-slate-200">
+          {% endif %}
+        </a>
+        <div class="min-w-0 flex-1">
+          <a href="/f/{{ file.stored_name }}" target="_blank" rel="noopener"
+             class="block truncate text-sm font-medium hover:underline">{{ file.original_name }}</a>
+          <p class="text-xs text-slate-500">{{ file.size_display() }}</p>
+        </div>
+        <div class="flex shrink-0 items-center gap-1">
+          <form method="post" action="/products/{{ product.id }}/files/{{ file.id }}/move">
+            <input type="hidden" name="direction" value="up">
+            <button type="submit" title="Нагоре" aria-label="Премести нагоре" {% if loop.first %}disabled{% endif %}
+                    class="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:invisible">↑</button>
+          </form>
+          <form method="post" action="/products/{{ product.id }}/files/{{ file.id }}/move">
+            <input type="hidden" name="direction" value="down">
+            <button type="submit" title="Надолу" aria-label="Премести надолу" {% if loop.last %}disabled{% endif %}
+                    class="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:invisible">↓</button>
+          </form>
+          <form method="post" action="/products/{{ product.id }}/files/{{ file.id }}/delete"
+                onsubmit="return confirm('Да изтрия ли „' + this.dataset.name + '“?')" data-name="{{ file.original_name }}">
+            <button type="submit" title="Изтрий" aria-label="Изтрий файла"
+                    class="rounded p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-700">✕</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" data-busy="Качване…"
+          action="/products/{{ product.id }}/manuals/{{ tab.code }}/files"
+          class="mt-4 rounded-lg border border-dashed border-slate-300 p-4">
+      <label class="block">
+        <span class="label">Добави файлове към упътването на {{ tab.name }}</span>
+        <input type="file" name="files" multiple required
+               accept="image/jpeg,image/png,image/webp,application/pdf"
+               class="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-200">
+      </label>
+      <p class="hint">JPG, PNG, WEBP или PDF, до {{ max_upload_mb }} MB на файл и до {{ max_files }} файла наведнъж. Нови файлове се добавят накрая.</p>
+      <button type="submit" class="btn-primary mt-3">Качи</button>
+    </form>
   </section>
 
   <form method="post" action="/products/{{ product.id }}" class="card">

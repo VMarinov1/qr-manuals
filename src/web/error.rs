@@ -5,6 +5,8 @@ use axum::{
 
 pub enum AppError {
     NotFound,
+    /// Грешка с конкретен статус и съобщение за потребителя.
+    Status(StatusCode, String),
     /// Логва се пълната причина, а потребителят вижда общо съобщение.
     Internal(anyhow::Error),
 }
@@ -13,6 +15,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         match self {
             AppError::NotFound => (StatusCode::NOT_FOUND, "Не е намерено").into_response(),
+            AppError::Status(status, message) => (status, message).into_response(),
             AppError::Internal(err) => {
                 tracing::error!("{err:#}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Възникна грешка").into_response()

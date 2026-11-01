@@ -27,6 +27,11 @@ Rust, Axum 0.8, Askama 0.14 (шаблони в `templates/`), HTMX, Tailwind v4 
 - Формите са обикновен POST + redirect. При грешка страницата се рендира отново с 422 и `FormErrors`. HTMX се ползва само там, където има полза (търсене на живо с `hx-select`).
 - Общите класове (`btn-primary`, `card`, `input`...) са `@utility` в `assets/app.css`.
 - HTMX е в `static/vendor/htmx-2.0.4.min.js`, без CDN.
+- Упътване (`manuals`) съществува, докато има файлове: създава се при първото качване и се трие с последния файл (`src/manuals.rs`).
+- Качване (`src/web/files.rs`): поточно във временен `.upload-*` файл, лимит на файл `MAX_UPLOAD_MB`, видът по първите байтове (`storage::FileKind::detect`), после rename. Временните файлове се чистят при старт.
+- Файловете се сервират публично на `/f/{stored_name}` (с Range и `immutable` кеш). Изтриването на файл или продукт трие и от диска.
+- Съобщения след redirect: `web::flash::Flash` (бисквитка за една заявка).
+- Product id-тата се преизползват след изтриване (SQLite `INTEGER PRIMARY KEY`), затова навън се ползва само `public_slug`.
 
 ## Тестове
 ```bash
@@ -47,5 +52,5 @@ docker compose exec app qr-manuals create-admin admin@example.com
 1. ✅ Скелет, база, миграции, Docker, `create-admin`
 2. ✅ Вход и сесии
 3. ✅ Продукти
-4. Упътвания по езици и качване на файлове
+4. ✅ Упътвания по езици и качване на файлове
 5. QR код и публична страница

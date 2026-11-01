@@ -2,3 +2,4 @@
 /data
 /static/app.css
 .env
+.DS_Store
