@@ -12,6 +12,16 @@ cd "$(dirname "$0")/.."
 image=$1
 container=qr-manuals
 
+# Еднократната настройка от DEPLOY.md (стъпка 2). Без нея контейнерът не може да тръгне.
+missing=""
+[ -f qr-manuals.env ] || missing="$missing qr-manuals.env"
+[ -d data ] || missing="$missing data/"
+if [ -n "$missing" ]; then
+    echo "ГРЕШКА: в $(pwd) липсва:$missing" >&2
+    echo "Създай ги по DEPLOY.md, стъпка 2 (\"Папка и настройки на сървъра\")." >&2
+    exit 1
+fi
+
 if [ -n "${GHCR_TOKEN:-}" ]; then
     printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
     # Токенът на GitHub Actions е валиден само по време на workflow-а. Не го оставяме на диска.
@@ -45,9 +55,9 @@ wait_healthy() {
 
 echo "Пускане на $image (предишна: ${previous:-няма})"
 set_image "$image"
-docker compose up -d --no-build --remove-orphans
 
-if wait_healthy; then
+# Грешка в compose (напр. невалиден файл) се третира като неуспешна версия: връщане назад.
+if docker compose up -d --no-build --remove-orphans && wait_healthy; then
     echo "OK: $image работи."
 else
     echo "ГРЕШКА: $image не стана healthy. Последни логове:" >&2
