@@ -7,6 +7,12 @@ services:
     image: ${QR_IMAGE:-qr-manuals}
     build: .
     restart: unless-stopped
+    # Сървърът е споделен с ORTHOTEH: дори при атака това приложение не може да вземе
+    # повече. Натоварващ тест на 1 ядро: ~2000 публични страници/s при ~110 MB памет.
+    # Паметта е за качването на големи снимки (до 2 едновременно, вж. images.rs).
+    cpus: 1.0
+    mem_limit: 512m
+    memswap_limit: 512m
     env_file:
       - qr-manuals.env # gitignored, само на сървъра. Пример: qr-manuals.env.example
     ports:

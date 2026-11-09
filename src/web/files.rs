@@ -92,6 +92,11 @@ pub async fn upload(
                         rejected.push(format!("{original}: снимката е повредена или не може да се прочете"));
                         continue;
                     }
+                    DisplayCopy::TooLarge => {
+                        storage::remove_files(dir, &[stored_name]).await;
+                        rejected.push(format!("{original}: резолюцията е твърде голяма (над ~85 мегапиксела)"));
+                        continue;
+                    }
                     DisplayCopy::NotNeeded => (None, None),
                     DisplayCopy::Created { name, size } => (Some(name), Some(size)),
                 };
@@ -187,12 +192,15 @@ enum DisplayCopy {
     NotNeeded,
     Created { name: String, size: i64 },
     Unreadable,
+    TooLarge,
 }
 
-/// Декодирането на голяма снимка заема стотици MB. Едновременно се обработват най-много две.
+/// Декодирана снимка заема до 256 MB (images::MAX_ALLOC), а контейнерът има 512 MB.
+/// Затова снимките се обработват една по една. Качването е само от админа, така че
+/// опашката не забавя публичната страница.
 fn resize_slots() -> &'static Semaphore {
     static SLOTS: OnceLock<Semaphore> = OnceLock::new();
-    SLOTS.get_or_init(|| Semaphore::new(2))
+    SLOTS.get_or_init(|| Semaphore::new(1))
 }
 
 /// Записва намалено копие до оригинала. Снимката се декодира и така се проверява,
@@ -224,7 +232,11 @@ async fn make_display_copy(
             );
             Ok(DisplayCopy::Created { name, size: bytes.len() as i64 })
         }
-        Err(err) => {
+        Err(images::CopyError::TooLarge) => {
+            tracing::warn!(file = %stored_name, "снимката е над тавана на паметта");
+            Ok(DisplayCopy::TooLarge)
+        }
+        Err(images::CopyError::Unreadable(err)) => {
             tracing::warn!(file = %stored_name, "снимката не може да се прочете: {err:#}");
             Ok(DisplayCopy::Unreadable)
         }

@@ -5,7 +5,6 @@
 
 use std::{io::Cursor, path::Path};
 
-use anyhow::Context;
 use image::{
     codecs::jpeg::JpegEncoder, imageops::FilterType, metadata::Orientation, DynamicImage,
     GenericImageView, ImageDecoder, ImageReader, Limits, RgbImage,
@@ -16,13 +15,39 @@ pub const MAX_SIDE: u32 = 1600;
 const JPEG_QUALITY: u8 = 82;
 /// Малка снимка, която вече е в размер, се показва директно.
 const KEEP_ORIGINAL_BELOW: u64 = 400 * 1024;
-/// Защита от „бомби“: малък файл, който декомпресиран заема гигабайти.
+/// Защита от „бомби“ (малък файл, който декомпресиран заема гигабайти) и таван на паметта
+/// при лимита на контейнера (512 MB): 256 MB стигат за ~85 MP снимка (48 MP = 144 MB).
 const MAX_PIXELS_SIDE: u32 = 16_000;
-const MAX_ALLOC: u64 = 768 * 1024 * 1024;
+const MAX_ALLOC: u64 = 256 * 1024 * 1024;
+
+#[derive(Debug)]
+pub enum CopyError {
+    /// Снимката е над тавана на паметта (резолюция над ~85 MP).
+    TooLarge,
+    /// Не е снимка, която може да се прочете.
+    Unreadable(anyhow::Error),
+}
+
+impl From<image::ImageError> for CopyError {
+    fn from(err: image::ImageError) -> Self {
+        match err {
+            image::ImageError::Limits(_) => CopyError::TooLarge,
+            other => CopyError::Unreadable(other.into()),
+        }
+    }
+}
+
+impl From<std::io::Error> for CopyError {
+    fn from(err: std::io::Error) -> Self {
+        CopyError::Unreadable(err.into())
+    }
+}
 
 /// Прави копие за показване. `Ok(None)` значи, че оригиналът е подходящ както е.
-/// Грешка значи, че файлът не е снимка, която може да се прочете.
-pub fn display_copy(path: &Path, original_size: u64) -> anyhow::Result<Option<Vec<u8>>> {
+///
+/// Паметта се пази внимателно, защото снимка от 48 MP заема 144 MB декодирана:
+/// освен нея има само малки буфери, без копия на пълния размер.
+pub fn display_copy(path: &Path, original_size: u64) -> Result<Option<Vec<u8>>, CopyError> {
     let mut reader = ImageReader::open(path)?.with_guessed_format()?;
     let mut limits = Limits::default();
     limits.max_image_width = Some(MAX_PIXELS_SIDE);
@@ -30,25 +55,29 @@ pub fn display_copy(path: &Path, original_size: u64) -> anyhow::Result<Option<Ve
     limits.max_alloc = Some(MAX_ALLOC);
     reader.limits(limits);
 
-    let mut decoder = reader.into_decoder().context("непознат формат")?;
+    let mut decoder = reader.into_decoder()?;
+    // `max_alloc` по-горе не се спазва от всички декодери (JPEG го пропуска), затова
+    // размерът се проверява тук, от заглавието на файла, преди да се заеме паметта.
+    if decoder.total_bytes() > MAX_ALLOC {
+        return Err(CopyError::TooLarge);
+    }
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
-    let mut image = DynamicImage::from_decoder(decoder).context("повредена снимка")?;
+    let image = DynamicImage::from_decoder(decoder)?;
 
-    // Телефоните пазят снимката „легнала“ и записват завъртането в EXIF.
-    // Новият JPEG е без EXIF, затова завъртането се прилага върху пикселите.
     let rotated = orientation != Orientation::NoTransforms;
-    image.apply_orientation(orientation);
-
     let (width, height) = image.dimensions();
     let too_big = width.max(height) > MAX_SIDE;
     if !too_big && !rotated && original_size <= KEEP_ORIGINAL_BELOW {
         return Ok(None);
     }
-    if too_big {
-        image = image.resize(MAX_SIDE, MAX_SIDE, FilterType::CatmullRom);
-    }
 
-    let bytes = encode_jpeg(&flatten_on_white(&image))?;
+    // Първо намаляване, после завъртане: завъртането на пълната снимка би я копирало цялата.
+    let mut image = if too_big { shrink(image) } else { image };
+    // Телефоните пазят снимката „легнала“ и записват завъртането в EXIF.
+    // Новият JPEG е без EXIF, затова завъртането се прилага върху пикселите.
+    image.apply_orientation(orientation);
+
+    let bytes = encode_jpeg(&flatten_on_white(image)).map_err(CopyError::Unreadable)?;
     // Например малък PNG с няколко цвята може да е по-лек от JPEG.
     if !rotated && bytes.len() as u64 >= original_size {
         return Ok(None);
@@ -56,10 +85,23 @@ pub fn display_copy(path: &Path, original_size: u64) -> anyhow::Result<Option<Ve
     Ok(Some(bytes))
 }
 
+/// До MAX_SIDE. Голямата снимка първо се смалява до 2×MAX_SIDE с `thumbnail`, което
+/// усреднява пикселите без междинен буфер с размера на оригинала. Качественото
+/// намаляване (CatmullRom) е върху вече малкото копие.
+fn shrink(image: DynamicImage) -> DynamicImage {
+    let image = if image.width().max(image.height()) > 2 * MAX_SIDE {
+        image.thumbnail(2 * MAX_SIDE, 2 * MAX_SIDE)
+    } else {
+        image
+    };
+    image.resize(MAX_SIDE, MAX_SIDE, FilterType::CatmullRom)
+}
+
 /// JPEG няма прозрачност: прозрачните части стават бели, както на хартия.
-fn flatten_on_white(image: &DynamicImage) -> RgbImage {
+fn flatten_on_white(image: DynamicImage) -> RgbImage {
     if !image.color().has_alpha() {
-        return image.to_rgb8();
+        // Без копие, ако снимката вече е RGB8 (обичайният случай при JPEG).
+        return image.into_rgb8();
     }
     let rgba = image.to_rgba8();
     RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
@@ -147,6 +189,20 @@ mod tests {
         let path = write_temp("rotated.jpg", &with_exif);
         let copy = display_copy(&path, with_exif.len() as u64).unwrap().unwrap();
         assert_eq!(image::load_from_memory(&copy).unwrap().dimensions(), (20, 40));
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn oversized_jpeg_is_rejected_before_decoding() {
+        // Истински малък JPEG, на който в заглавието (SOF0) са записани размери 12000×12000:
+        // 432 MB декодиран, над тавана. Трябва да се откаже само по заглавието.
+        let mut jpeg = encode(&noisy_rgb(16, 16), ImageFormat::Jpeg);
+        let sof = jpeg.windows(2).position(|w| w == [0xFF, 0xC0]).expect("SOF0");
+        jpeg[sof + 5..sof + 7].copy_from_slice(&12_000u16.to_be_bytes());
+        jpeg[sof + 7..sof + 9].copy_from_slice(&12_000u16.to_be_bytes());
+        let path = write_temp("oversized.jpg", &jpeg);
+        let result = display_copy(&path, jpeg.len() as u64);
+        assert!(matches!(result, Err(CopyError::TooLarge)), "{result:?}");
         std::fs::remove_file(path).ok();
     }
 
