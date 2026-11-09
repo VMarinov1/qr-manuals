@@ -121,6 +121,7 @@ struct ShowTemplate {
     tabs: Vec<LanguageTab>,
     files: Vec<FileRow>,
     max_upload_mb: usize,
+    max_request_mb: usize,
     max_files: usize,
 }
 
@@ -186,6 +187,7 @@ async fn show_page(
         flash,
         tabs,
         max_upload_mb: state.config.max_upload_bytes / 1024 / 1024,
+        max_request_mb: state.config.max_request_bytes / 1024 / 1024,
         max_files: MAX_FILES_PER_UPLOAD,
     })
 }

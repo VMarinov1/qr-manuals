@@ -30,6 +30,31 @@
     });
   });
 
+  // Проверка на размера преди качване, за да не стигне голяма заявка до Cloudflare,
+  // който я спира със своя страница за грешка. Сървърът проверява същото отново.
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!form.dataset.maxTotalMb) return;
+    const files = [...form.querySelectorAll('input[type="file"]')].flatMap((input) => [...input.files]);
+    const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1).replace('.0', '');
+    const maxFile = Number(form.dataset.maxFileMb) * 1024 * 1024;
+    const maxTotal = Number(form.dataset.maxTotalMb) * 1024 * 1024;
+    const total = files.reduce((sum, file) => sum + file.size, 0);
+    const tooBig = files.filter((file) => file.size > maxFile);
+
+    let error = '';
+    if (tooBig.length) {
+      error = tooBig.map((f) => `„${f.name}“ е ${mb(f.size)} MB, а може до ${form.dataset.maxFileMb} MB.`).join(' ');
+    } else if (files.length > Number(form.dataset.maxFiles)) {
+      error = `Избрани са ${files.length} файла, а наведнъж може до ${form.dataset.maxFiles}. Качи ги на няколко пъти.`;
+    } else if (total > maxTotal) {
+      error = `Избраните файлове са общо ${mb(total)} MB, а наведнъж може до ${form.dataset.maxTotalMb} MB. Качи ги на няколко пъти.`;
+    }
+    const box = form.querySelector('[data-upload-error]');
+    if (box) { box.textContent = error; box.hidden = !error; }
+    if (error) event.preventDefault();
+  });
+
   // Форма с data-busy="текст" заключва бутона си, докато се изпраща (напр. при качване).
   document.addEventListener('submit', (event) => {
     const form = event.target;

@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM rust:1-bookworm AS build
 ARG TARGETARCH
 ARG TAILWIND_VERSION=4.1.11

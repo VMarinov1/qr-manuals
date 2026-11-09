@@ -103,6 +103,7 @@
     {% endif %}
 
     <form method="post" enctype="multipart/form-data" data-busy="Качване…"
+          data-max-file-mb="{{ max_upload_mb }}" data-max-total-mb="{{ max_request_mb }}" data-max-files="{{ max_files }}"
           action="/products/{{ product.id }}/manuals/{{ tab.code }}/files"
           class="mt-4 rounded-lg border border-dashed border-slate-300 p-4">
       <label class="block">
@@ -111,7 +112,8 @@
                accept="image/jpeg,image/png,image/webp,application/pdf"
                class="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-200">
       </label>
-      <p class="hint">JPG, PNG, WEBP или PDF, до {{ max_upload_mb }} MB на файл и до {{ max_files }} файла наведнъж. Нови файлове се добавят накрая.</p>
+      <p class="hint">JPG, PNG, WEBP или PDF, до {{ max_upload_mb }} MB на файл. Наведнъж: до {{ max_files }} файла и до {{ max_request_mb }} MB общо. Нови файлове се добавят накрая.</p>
+      <p class="field-error" data-upload-error role="alert" hidden></p>
       <button type="submit" class="btn-primary mt-3">Качи</button>
     </form>
   </section>

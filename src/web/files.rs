@@ -136,7 +136,7 @@ pub async fn upload(
 
 fn interrupted(err: &MultipartError) -> String {
     if err.status() == StatusCode::PAYLOAD_TOO_LARGE {
-        "Общият размер е твърде голям. Качи файловете на няколко пъти.".to_owned()
+        "Общият размер на файловете е твърде голям. Качи ги на няколко пъти.".to_owned()
     } else {
         tracing::warn!("прекъснато качване: {err}");
         "Качването беше прекъснато.".to_owned()

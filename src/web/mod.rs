@@ -37,7 +37,7 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
     let addr = config.bind_addr;
     let static_dir = ServeDir::new(&config.static_dir);
     // Лимитът на файл се проверява при четенето, това е таванът за цялата заявка.
-    let upload_limit = config.max_upload_bytes * files::MAX_FILES_PER_UPLOAD + 1024 * 1024;
+    let upload_limit = config.max_request_bytes;
     let state = AppState {
         db,
         config: Arc::new(config),

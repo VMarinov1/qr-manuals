@@ -11,6 +11,8 @@ pub struct Config {
     /// Адресът, към който сочат публичните линкове и QR кодовете, без `/` накрая.
     pub public_base_url: String,
     pub max_upload_bytes: usize,
+    /// Таван на една заявка за качване (всички файлове заедно). Cloudflare спира над 100 MB.
+    pub max_request_bytes: usize,
     /// Приложението е зад reverse proxy и адресът на клиента е в `X-Forwarded-For`.
     pub trust_proxy: bool,
 }
@@ -20,6 +22,9 @@ impl Config {
         let max_upload_mb: usize = var("MAX_UPLOAD_MB", "20")
             .parse()
             .context("MAX_UPLOAD_MB трябва да е цяло число")?;
+        let max_request_mb: usize = var("MAX_REQUEST_MB", "95")
+            .parse()
+            .context("MAX_REQUEST_MB трябва да е цяло число")?;
 
         Ok(Self {
             bind_addr: var("BIND_ADDR", "0.0.0.0:8080")
@@ -32,6 +37,7 @@ impl Config {
                 .trim_end_matches('/')
                 .to_owned(),
             max_upload_bytes: max_upload_mb * 1024 * 1024,
+            max_request_bytes: max_request_mb * 1024 * 1024,
             trust_proxy: matches!(
                 var("TRUST_PROXY", "false").to_ascii_lowercase().as_str(),
                 "1" | "true" | "yes"
