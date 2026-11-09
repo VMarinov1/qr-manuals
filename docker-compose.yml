@@ -2,7 +2,9 @@
 services:
   qr-manuals:
     container_name: qr-manuals
-    image: qr-manuals
+    # На сървъра: image от ghcr.io, записан в .env от scripts/deploy.sh (GitHub Actions).
+    # Локално: билдва се от кода с `docker compose up -d --build`.
+    image: ${QR_IMAGE:-qr-manuals}
     build: .
     restart: unless-stopped
     env_file:
