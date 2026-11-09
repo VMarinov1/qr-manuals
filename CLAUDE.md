@@ -52,7 +52,7 @@ docker compose exec qr-manuals qr-manuals create-admin admin@example.com
 ```
 
 Приложението е на `127.0.0.1:5200`. Данните (база, файлове, `backups/`) са в `./data`.
-Пускане на сървъра, nginx, backup и възстановяване: `DEPLOY.md`. Production върви на сървъра на ORTHOTEH зад nginx (`deploy/nginx/qr-manuals.conf`).
+Пускане на сървъра, nginx, backup и възстановяване: `DEPLOY.md`. Production върви на сървъра на ORTHOTEH зад nginx на `https://qr.dron.bg` (`deploy/nginx/qr.dron.bg.conf`).
 Подкоманди на бинарния файл: `serve` (по подразбиране), `create-admin`, `backup [папка] --keep N`, `health`.
 
 ## Ред на работа

@@ -1,4 +1,4 @@
-# Production и локално. nginx на хоста е единственият вход (deploy/nginx/qr-manuals.conf).
+# Production и локално. nginx на хоста е единственият вход (deploy/nginx/qr.dron.bg.conf).
 services:
   qr-manuals:
     container_name: qr-manuals

@@ -3,7 +3,7 @@
 Приложението върви на същия сървър като ORTHOTEH, по същия модел: Docker контейнер,
 който слуша само на `127.0.0.1:5200`, и nginx на хоста пред него с HTTPS от Let's Encrypt.
 
-В примерите домейнът е `qr.example.bg`. Замени го навсякъде с истинския.
+Домейнът е `qr.dron.bg`.
 
 > **Преди първия печат на QR код:** домейнът и `PUBLIC_BASE_URL` трябва да са окончателни.
 > Те се съдържат в кода и след отпечатване не могат да се сменят.
@@ -11,7 +11,7 @@
 ## Първоначално пускане
 
 ### 1. DNS
-A запис за `qr.example.bg` към IP адреса на сървъра. Провери с `dig +short qr.example.bg`.
+A запис за `qr.dron.bg` към IP адреса на сървъра. Провери с `dig +short qr.dron.bg`.
 
 ### 2. Кодът
 ```bash
@@ -23,7 +23,7 @@ cd qr-manuals
 ### 3. Настройки
 ```bash
 cp qr-manuals.env.example qr-manuals.env
-nano qr-manuals.env         # PUBLIC_BASE_URL=https://qr.example.bg, TRUST_PROXY=true
+nano qr-manuals.env         # PUBLIC_BASE_URL=https://qr.dron.bg, TRUST_PROXY=true
 ```
 
 ### 4. Папка за данните
@@ -49,20 +49,19 @@ docker compose exec qr-manuals qr-manuals create-admin твоят@email.bg
 
 ### 7. nginx и HTTPS
 ```bash
-sudo cp deploy/nginx/qr-manuals.conf /etc/nginx/sites-available/qr.example.bg.conf
-sudo sed -i 's/qr.example.bg/<истинският-домейн>/g' /etc/nginx/sites-available/qr.example.bg.conf
-sudo certbot certonly --nginx -d qr.example.bg
-sudo ln -s /etc/nginx/sites-available/qr.example.bg.conf /etc/nginx/sites-enabled/
+sudo cp deploy/nginx/qr.dron.bg.conf /etc/nginx/sites-available/qr.dron.bg.conf
+sudo certbot certonly --nginx -d qr.dron.bg
+sudo ln -s /etc/nginx/sites-available/qr.dron.bg.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ### 8. Проверка
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://qr.example.bg/health   # 200
-curl -s -o /dev/null -w "%{http_code}\n" http://qr.example.bg/health    # 301
+curl -s -o /dev/null -w "%{http_code}\n" https://qr.dron.bg/health   # 200
+curl -s -o /dev/null -w "%{http_code}\n" http://qr.dron.bg/health    # 301
 ```
 После:
-1. Влез на `https://qr.example.bg`, създай пробен продукт и качи снимка и PDF.
+1. Влез на `https://qr.dron.bg`, създай пробен продукт и качи снимка и PDF.
 2. Изтегли QR кода, **сканирай го с телефон** и провери, че се отваря упътването.
 3. Пробвай превключването на езика.
 4. Изтрий пробния продукт.
