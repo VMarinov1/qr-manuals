@@ -4,10 +4,10 @@
 {% block lang %}und{% endblock %}
 {% block title %}{{ code }}{% endblock %}
 {% block head %}<meta name="robots" content="noindex">{% endblock %}
-{% block body_class %}min-h-screen bg-white text-slate-900 antialiased{% endblock %}
+{% block body_class %}min-h-screen bg-white text-ink antialiased{% endblock %}
 
 {% block content %}
-<main class="flex min-h-screen flex-col items-center justify-center gap-4 text-slate-300">
+<main class="relative flex min-h-screen flex-col items-center justify-center gap-4 text-ink/25">
   {% if code == 429 %}
   <svg class="h-20 w-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
@@ -17,6 +17,8 @@
     <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M14 14h2M18 14h2M14 18h2M18 18h2"/><path d="M3 3l18 18"/>
   </svg>
   {% endif %}
-  <p class="text-2xl font-semibold tracking-widest text-slate-400">{{ code }}</p>
+  <p class="text-2xl font-semibold tracking-widest text-ink/40">{{ code }}</p>
+  <img src="/static/brand/ita-logo.svg" alt="ITA Home &amp; Garden" width="200" height="46"
+       class="absolute bottom-10 h-7 w-auto opacity-70">
 </main>
 {% endblock %}

@@ -7,7 +7,7 @@
   </label>
 
   <label class="block">
-    <span class="label">SKU <span class="font-normal text-slate-400">(по избор)</span></span>
+    <span class="label">SKU <span class="font-normal text-ink/40">(по избор)</span></span>
     <input name="sku" value="{{ form.sku }}" maxlength="64"
            class="input {% if errors.sku.is_some() %}input-error{% endif %}">
     {% if let Some(error) = errors.sku %}<span class="field-error">{{ error }}</span>{% endif %}
@@ -25,7 +25,7 @@
   </label>
 
   <label class="block">
-    <span class="label">Описание <span class="font-normal text-slate-400">(по избор, вижда се само тук)</span></span>
+    <span class="label">Описание <span class="font-normal text-ink/40">(по избор, вижда се само тук)</span></span>
     <textarea name="description" rows="3" maxlength="2000"
               class="input {% if errors.description.is_some() %}input-error{% endif %}">{{ form.description }}</textarea>
     {% if let Some(error) = errors.description %}<span class="field-error">{{ error }}</span>{% endif %}

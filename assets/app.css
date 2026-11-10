@@ -1,33 +1,72 @@
 @import "tailwindcss";
 @source "../templates";
 
+/* Sofia Sans, същият шрифт като в новия дизайн на ITA Home & Garden (OFL). */
+@font-face {
+  font-family: "Sofia Sans";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/sofia-sans-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Sofia Sans";
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/sofia-sans-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Sofia Sans";
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/sofia-sans-700.woff2") format("woff2");
+}
+
+/* Цветовете на ITA Home & Garden (ita-home-garden/src/styles/global.css). */
+@theme {
+  --font-sans: "Sofia Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-brand: #1f3627;
+  --color-brand-hover: #3a6c4c;
+  --color-accent: #86bc25;
+  --color-accent-soft: #d7f0b2;
+  --color-ita-red: #be1622;
+  --color-ink: #3c3c3b;
+  --color-canvas: #f0f2ee;
+  --color-line: #d9d9d9;
+}
+
+/* Логото като едноцветен печат: формата е от SVG-то, цветът от background. */
+@utility stamp-logo {
+  background-color: var(--color-ita-red);
+  mask: url("/static/brand/ita-logo.svg") center / contain no-repeat;
+}
+
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-slate-900 text-white hover:bg-slate-700;
+  @apply btn bg-brand text-white hover:bg-brand-hover;
 }
 @utility btn-secondary {
-  @apply btn bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50;
+  @apply btn bg-white text-ink ring-1 ring-line hover:bg-canvas;
 }
 @utility btn-danger {
-  @apply btn bg-white text-red-700 ring-1 ring-red-200 hover:bg-red-50;
+  @apply btn bg-white text-ita-red ring-1 ring-ita-red/30 hover:bg-ita-red/5;
 }
 @utility card {
-  @apply rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6;
+  @apply rounded-xl bg-white p-5 shadow-sm ring-1 ring-line sm:p-6;
 }
 @utility label {
-  @apply text-sm font-medium text-slate-700;
+  @apply text-sm font-semibold text-ink;
 }
 @utility hint {
-  @apply mt-1 block text-xs text-slate-500;
+  @apply mt-1 block text-xs text-ink/60;
 }
 @utility input {
-  @apply mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200;
+  @apply mt-1 block w-full rounded-md border border-line bg-white px-3 py-2 text-ink focus:border-brand-hover focus:outline-none focus:ring-2 focus:ring-accent/40;
 }
 @utility input-error {
-  @apply border-red-400 focus:border-red-500 focus:ring-red-100;
+  @apply border-ita-red/60 focus:border-ita-red focus:ring-ita-red/20;
 }
 @utility field-error {
-  @apply mt-1 block text-sm text-red-700;
+  @apply mt-1 block text-sm text-ita-red;
 }
