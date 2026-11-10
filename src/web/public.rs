@@ -28,6 +28,18 @@ struct ManualTemplate {
     files: Vec<FileRow>,
 }
 
+impl ManualTemplate {
+    /// Надписът на бутона за PDF е на езика на показаното упътване, не на интерфейса.
+    fn open_label(&self) -> &'static str {
+        match self.language.as_str() {
+            "bg" => "Отвори",
+            "de" => "Öffnen",
+            "ro" => "Deschide",
+            _ => "Open",
+        }
+    }
+}
+
 #[derive(Template)]
 #[template(path = "public/status.html")]
 pub struct StatusTemplate {

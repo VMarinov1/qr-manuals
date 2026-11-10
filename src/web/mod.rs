@@ -7,7 +7,11 @@ mod products;
 mod public;
 mod rate_limit;
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use anyhow::Context;
 use axum::{
@@ -18,11 +22,32 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer, trace::TraceLayer};
 
 use crate::config::Config;
+
+static ASSET_VERSION: OnceLock<String> = OnceLock::new();
+
+/// Версия на статичните файлове за адресите им (`/static/app.css?v=...`). Cloudflare и
+/// браузърите кешират `/static` дълго, а при нова версия адресът е нов и старото не се ползва.
+pub fn asset_version() -> &'static str {
+    ASSET_VERSION.get().map_or("dev", String::as_str)
+}
+
+/// Хеш от съдържанието на файловете, които шаблоните и CSS-ът реферират.
+fn compute_asset_version(static_dir: &std::path::Path) -> String {
+    let mut hasher = Sha256::new();
+    for file in ["app.css", "brand/ita-logo.svg", "brand/ita-mark.svg"] {
+        if let Ok(bytes) = std::fs::read(static_dir.join(file)) {
+            hasher.update(&bytes);
+        }
+    }
+    hasher.finalize().iter().take(5).map(|b| format!("{b:02x}")).collect()
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -37,7 +62,16 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
     crate::storage::remove_temp_files(&config.upload_dir).await?;
 
     let addr = config.bind_addr;
-    let static_dir = ServeDir::new(&config.static_dir);
+    ASSET_VERSION.get_or_init(|| compute_asset_version(&config.static_dir));
+    tracing::info!(version = asset_version(), "статични файлове");
+    // Адресите на CSS и логото съдържат версията. Шрифтовете и всичко без версия се
+    // обновяват в кеша на Cloudflare най-късно за ден.
+    let static_dir = ServiceBuilder::new()
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=86400"),
+        ))
+        .service(ServeDir::new(&config.static_dir));
     // Лимитът на файл се проверява при четенето, това е таванът за цялата заявка.
     let upload_limit = config.max_request_bytes;
     let state = AppState {

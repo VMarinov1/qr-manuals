@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}QR упътвания{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <link rel="icon" href="/static/brand/ita-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css?v={{ crate::web::asset_version() }}">
+  <link rel="icon" href="/static/brand/ita-mark.svg?v={{ crate::web::asset_version() }}" type="image/svg+xml">
   <meta name="theme-color" content="#1f3627">
   {% block head %}{% endblock %}
 </head>

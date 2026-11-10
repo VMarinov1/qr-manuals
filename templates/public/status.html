@@ -18,7 +18,7 @@
   </svg>
   {% endif %}
   <p class="text-2xl font-semibold tracking-widest text-ink/40">{{ code }}</p>
-  <img src="/static/brand/ita-logo.svg" alt="ITA Home &amp; Garden" width="200" height="46"
+  <img src="/static/brand/ita-logo.svg?v={{ crate::web::asset_version() }}" alt="ITA Home &amp; Garden" width="200" height="46"
        class="absolute bottom-10 h-7 w-auto opacity-70">
 </main>
 {% endblock %}
