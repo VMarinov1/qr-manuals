@@ -1,4 +1,5 @@
 mod auth;
+mod crawlers;
 mod error;
 mod files;
 mod flash;
@@ -11,7 +12,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use anyhow::Context;
 use axum::{
     extract::{DefaultBodyLimit, Request, State},
-    http::{header, Method, StatusCode},
+    http::{header, HeaderName, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -19,7 +20,7 @@ use axum::{
 };
 use sqlx::SqlitePool;
 use tokio::net::TcpListener;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer, trace::TraceLayer};
 
 use crate::config::Config;
 
@@ -28,6 +29,7 @@ pub struct AppState {
     pub db: SqlitePool,
     pub config: Arc<Config>,
     pub login_limiter: Arc<rate_limit::LoginLimiter>,
+    pub public_guard: Arc<crawlers::PublicGuard>,
 }
 
 pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
@@ -42,7 +44,15 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
         db,
         config: Arc::new(config),
         login_limiter: Arc::default(),
+        public_guard: Arc::default(),
     };
+
+    // Публичните адреси минават през ограничението срещу crawler-и (crawlers.rs).
+    let public_routes = Router::new()
+        .route("/f/{stored_name}", get(files::serve))
+        .route("/m/{slug}", get(public::manual))
+        .route("/m/{slug}/{lang}", get(public::manual_in_language))
+        .route_layer(middleware::from_fn_with_state(state.clone(), crawlers::guard));
 
     let app = Router::new()
         .route("/", get(|| async { Redirect::to("/products") }))
@@ -60,12 +70,17 @@ pub async fn serve(config: Config, db: SqlitePool) -> anyhow::Result<()> {
         .route("/products/{id}/files/{file_id}/delete", post(files::delete))
         .route("/products/{id}/qr.svg", get(products::qr_svg))
         .route("/products/{id}/qr.png", get(products::qr_png))
-        .route("/f/{stored_name}", get(files::serve))
-        .route("/m/{slug}", get(public::manual))
-        .route("/m/{slug}/{lang}", get(public::manual_in_language))
+        .merge(public_routes)
+        .route("/robots.txt", get(robots_txt))
         .route("/health", get(health))
         .nest_service("/static", static_dir)
         .layer(middleware::from_fn_with_state(state.clone(), check_origin))
+        // Нищо от сайта не трябва да влиза в търсачки: и страниците, и файловете
+        // (`<meta name="robots">` в HTML не важи за PDF и снимки).
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-robots-tag"),
+            HeaderValue::from_static("noindex, nofollow, noarchive, noimageindex"),
+        ))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -117,6 +132,14 @@ pub async fn health_check(port: u16) -> anyhow::Result<()> {
     tokio::time::timeout(Duration::from_secs(5), check)
         .await
         .context("няма отговор")?
+}
+
+/// Спазващите правилата crawler-и (Google, Bing, AI ботовете) не обхождат нищо.
+async fn robots_txt() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        "User-agent: *\nDisallow: /\n",
+    )
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {

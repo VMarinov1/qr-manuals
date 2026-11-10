@@ -123,6 +123,56 @@ sudo crontab -e
   Backup, който е само на същия сървър, не пази от загуба на сървъра.
 - Пробвай веднъж ръчно: `./scripts/backup.sh` и провери, че в `data/backups/` има файл.
 
+### 9. Защита от crawler-и в Cloudflare
+Приложението само по себе си:
+- забранява обхождането с `/robots.txt` и `X-Robots-Tag: noindex` на всичко;
+- ограничава страниците `/m/` до 60 в минута от IP;
+- блокира за 30 минути IP, което опитва много несъществуващи линкове.
+
+**Снимките и PDF файловете обаче ги сервира кешът на Cloudflare** и повечето заявки за тях
+не стигат до сървъра. Затова ограничението за тях е тук.
+
+> **Не включвай „Bot Fight Mode“.** Той важи за цялата зона `dron.bg`, а в безплатния план
+> не може да се ограничи до един поддомейн. Може да спре ORTHOTEH и `orthlogin.dron.bg`,
+> които приемат заявки и от програми, не само от браузъри. Правилата по-долу засягат само `qr.dron.bg`.
+
+**a) Rate limiting** (Security → WAF → Rate limiting rules → Create rule):
+- Име: `qr: масово теглене`
+- Expression (Edit expression):
+  ```
+  (http.host eq "qr.dron.bg" and (starts_with(http.request.uri.path, "/f/") or starts_with(http.request.uri.path, "/m/")))
+  ```
+- Characteristics: IP. Requests: **50**, Period: **10 seconds**. Action: **Block**, Duration: **10 seconds**.
+
+Страница с упътване зарежда страницата и по една заявка на файл, обикновено под 20 общо,
+така че човек никога не стига до 50 за 10 секунди. Безплатният план позволява само едно такова правило,
+с 10 секунди за броене и блокиране.
+
+**b) Ботове и инструменти за теглене** (Security → WAF → Custom rules → Create rule):
+- Име: `qr: ботове`
+- Expression:
+  ```
+  (http.host eq "qr.dron.bg" and not starts_with(http.request.uri.path, "/health") and (cf.client.bot or http.user_agent eq "" or lower(http.user_agent) contains "python" or lower(http.user_agent) contains "curl" or lower(http.user_agent) contains "wget" or lower(http.user_agent) contains "scrapy" or lower(http.user_agent) contains "go-http-client" or lower(http.user_agent) contains "httpclient" or lower(http.user_agent) contains "headless"))
+  ```
+- Action: **Block**.
+
+`cf.client.bot` са познатите ботове: Google, Bing, социалните мрежи и т.н. Последствие:
+Viber, WhatsApp и Facebook няма да показват преглед на изпратен линк. Самият линк се
+отваря нормално. `/health` е изключен, за да работи проверката в GitHub Actions, която е с `curl`.
+
+**c) AI crawler-и** (Security → Settings → Bot traffic → **Block AI bots**: на всички
+страници). Засяга само AI crawler-ите, затова е безопасно за цялата зона.
+
+**Проверка** след включването (от лаптопа):
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://qr.dron.bg/m/abcdefgh      # 403 (curl е блокиран)
+curl -s -o /dev/null -w "%{http_code}\n" https://qr.dron.bg/health          # 200
+```
+И отвори упътване от телефона: трябва да работи нормално.
+
+**Ограничение:** по-сложен crawler, който се представя като браузър и тегли бавно, ще мине.
+Той обаче може да тегли само линкове, които вече има, защото адресите не могат да се налучкат.
+
 ## Обновяване
 Commit в `main`. Ходът се вижда в **Actions** в GitHub. Миграциите на базата се пускат
 автоматично при старт. Ако тестовете паднат, нищо не се пуска.

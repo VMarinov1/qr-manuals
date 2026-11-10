@@ -21,6 +21,7 @@ Rust, Axum 0.8, Askama 0.14 (шаблони в `templates/`), HTMX, Tailwind v4 
 - Нова схема = нова миграция в `migrations/`. Старите не се редактират.
 - Защитена страница = handler с аргумент `CurrentUser` (`src/web/auth.rs`). Без вход пренасочва към `/login?next=...`, а при HTMX заявка връща `HX-Redirect`.
 - Сесии: случаен токен в бисквитка `qrm_session` (HttpOnly, SameSite=Lax, Secure при https `PUBLIC_BASE_URL`), в базата е само SHA-256 хешът му. Валидност 30 дни.
+- Crawler-и (`src/web/crawlers.rs`, само `/m/` и `/f/`): 60 страници / 600 файла в минута от IP, а 30 липсващи линка за 10 мин блокират IP-то за 30 мин (429, страница без текст). Навсякъде `X-Robots-Tag: noindex`, а `/robots.txt` забранява всичко. Файловете ги сервира кешът на Cloudflare, затова основният лимит за тях е правило в Cloudflare (DEPLOY.md, стъпка 9).
 - CSRF: middleware `check_origin` отхвърля POST/PUT/DELETE с чужд `Origin`.
 - Ограничение на входа (`src/web/rate_limit.rs`, в паметта): 10 грешни опита от IP или 30 за email за 15 мин → 429 с `Retry-After`. Блокиран опит не проверява паролата. Успешен вход нулира броячите. Зад reverse proxy трябва `TRUST_PROXY=true`, иначе всички клиенти са с IP-то на proxy-то.
 - Търсенето е по `products.search_text` (име + SKU с малки букви, попълва се от `ProductInput::search_text`), защото `LIKE` в SQLite не прави кирилицата case-insensitive.

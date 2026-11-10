@@ -29,8 +29,10 @@ struct ManualTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "public/not_found.html")]
-struct NotFoundTemplate;
+#[template(path = "public/status.html")]
+pub struct StatusTemplate {
+    pub code: u16,
+}
 
 pub async fn manual(
     State(state): State<AppState>,
@@ -60,7 +62,7 @@ async fn respond(
         None
     };
     let Some(product) = product else {
-        return Ok((StatusCode::NOT_FOUND, render(&NotFoundTemplate)?).into_response());
+        return Ok((StatusCode::NOT_FOUND, render(&StatusTemplate { code: 404 })?).into_response());
     };
 
     let available = manuals::languages_with_files(&state.db, product.id).await?;
