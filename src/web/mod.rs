@@ -41,7 +41,14 @@ pub fn asset_version() -> &'static str {
 /// Хеш от съдържанието на файловете, които шаблоните и CSS-ът реферират.
 fn compute_asset_version(static_dir: &std::path::Path) -> String {
     let mut hasher = Sha256::new();
-    for file in ["app.css", "brand/ita-logo.svg", "brand/ita-mark.svg"] {
+    for file in [
+        "app.css",
+        "brand/ita-logo.svg",
+        "brand/ita-mark.svg",
+        "brand/stamp-ita.svg",
+        "brand/stamp-garden.svg",
+        "brand/stamp-leaf.svg",
+    ] {
         if let Ok(bytes) = std::fs::read(static_dir.join(file)) {
             hasher.update(&bytes);
         }

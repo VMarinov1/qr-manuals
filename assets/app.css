@@ -34,10 +34,19 @@
   --color-line: #d9d9d9;
 }
 
-/* Логото като едноцветен печат: формата е от SVG-то, цветът от background. */
-@utility stamp-logo {
+/* Логото като печат в три слоя с размерите на цялото лого (200×46), наслагани един
+   върху друг: формата е от SVG-то, цветът от background. */
+@utility stamp-ita {
   background-color: var(--color-ita-red);
-  mask: url("/static/brand/ita-logo.svg") center / contain no-repeat;
+  mask: url("/static/brand/stamp-ita.svg") center / contain no-repeat;
+}
+@utility stamp-garden {
+  background-color: var(--color-brand-hover);
+  mask: url("/static/brand/stamp-garden.svg") center / contain no-repeat;
+}
+@utility stamp-leaf {
+  background-color: var(--color-accent);
+  mask: url("/static/brand/stamp-leaf.svg") center / contain no-repeat;
 }
 
 @utility btn {
