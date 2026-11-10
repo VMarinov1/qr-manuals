@@ -28,6 +28,11 @@
   <div class="px-4 pb-8 pt-10 text-center">
     <h1 class="text-2xl font-bold leading-tight text-brand break-words">{{ product.name }}</h1>
     <div class="mx-auto mt-4 h-1 w-12 rounded-full bg-accent" aria-hidden="true"></div>
+    {% if !product.description.is_empty() %}
+    {#- Описанието е съдържание, въведено от админа (не интерфейсен текст). Черно за четимост;
+        редовете се пазят, както са въведени. -#}
+    <p class="mx-auto mt-6 max-w-prose whitespace-pre-line break-words text-left text-[17px] leading-relaxed text-black">{{ product.description }}</p>
+    {% endif %}
   </div>
   {% if files.is_empty() %}
   <div class="flex min-h-[60vh] items-center justify-center text-ink/25" aria-hidden="true">
