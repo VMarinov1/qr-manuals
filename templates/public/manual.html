@@ -31,7 +31,7 @@
     {% if !product.description.is_empty() %}
     {#- Описанието е съдържание, въведено от админа (не интерфейсен текст). Черно за четимост;
         редовете се пазят, както са въведени. -#}
-    <p class="mx-auto mt-6 max-w-prose whitespace-pre-line break-words text-left text-[17px] leading-relaxed text-black">{{ product.description }}</p>
+    <p class="mt-6 whitespace-pre-line break-words text-left text-[17px] leading-relaxed text-black" data-description>{{ product.description }}</p>
     {% endif %}
   </div>
   {% if files.is_empty() %}
